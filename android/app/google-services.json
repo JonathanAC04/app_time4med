@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "812282423584",
+    "project_id": "time4med",
+    "storage_bucket": "time4med.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:812282423584:android:2eaa6a9136e88225358f45",
+        "android_client_info": {
+          "package_name": "com.example.app_medica"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDBgddKe_tXW0vK_eybOKzKAZPXUuWSN00"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
