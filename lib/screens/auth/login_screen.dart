@@ -3,6 +3,8 @@ import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
 
 class LoginScreen extends StatefulWidget {
+  const LoginScreen({Key? key}) : super(key: key);
+
   @override
   _LoginScreenState createState() => _LoginScreenState();
 }
@@ -10,96 +12,105 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  
-  final authService = AuthService();
-  final firestoreService = FirestoreService();
-  
+  final _authService = AuthService();
+  final _firestoreService = FirestoreService();
   bool _isLoading = false;
 
   void _iniciarSesion() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    // 1. Intentar loguear en Firebase Auth
-    var user = await authService.login(
+    setState(() => _isLoading = true);
+    
+    var user = await _authService.login(
       _emailController.text.trim(),
-      _passwordController.text.trim(),
+      _passwordController.text.trim()
     );
 
     if (user != null) {
-      // 2. Si el login es correcto, buscar su rol en Firestore
-      String? rol = await firestoreService.getUserRole(user.uid);
-
+      String? rol = await _firestoreService.getUserRole(user.uid);
       if (rol == 'admin') {
         Navigator.pushReplacementNamed(context, '/admin');
       } else if (rol == 'doctor') {
         Navigator.pushReplacementNamed(context, '/doctor');
-      } else if (rol == 'paciente') {
-        Navigator.pushReplacementNamed(context, '/paciente');
       } else {
-        _mostrarError("Usuario sin rol asignado");
+        Navigator.pushReplacementNamed(context, '/paciente');
       }
     } else {
-      _mostrarError("Correo o contraseña incorrectos");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Error: Revisa tus credenciales"), backgroundColor: Colors.red),
+      );
+      setState(() => _isLoading = false);
     }
-
-    setState(() {
-      _isLoading = false;
-    });
-  }
-
-  void _mostrarError(String mensaje) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensaje), backgroundColor: Colors.red),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Iniciar Sesión")),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextField(
-              controller: _emailController,
-              decoration: InputDecoration(
-                labelText: "Correo electrónico",
-                border: OutlineInputBorder(),
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(30.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 50),
+              Center(child: Icon(Icons.monitor_heart, size: 80, color: const Color(0xFF6B5DE8))),
+              const SizedBox(height: 20),
+              const Center(
+                child: Text("Time 4 med", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87)),
               ),
-              keyboardType: TextInputType.emailAddress,
-            ),
-            SizedBox(height: 15),
-            TextField(
-              controller: _passwordController,
-              decoration: InputDecoration(
-                labelText: "Contraseña",
-                border: OutlineInputBorder(),
+              const SizedBox(height: 40),
+              
+              const Text("Correo electrónico", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  hintText: "Ej. juan@ejemplo.com",
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
               ),
-              obscureText: true,
-            ),
-            SizedBox(height: 25),
-            _isLoading 
-              ? CircularProgressIndicator() 
-              : ElevatedButton(
-                  onPressed: _iniciarSesion,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                    child: Text("Entrar", style: TextStyle(fontSize: 16)),
-                    
+              const SizedBox(height: 20),
+
+              const Text("Contraseña", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  hintText: "••••••••",
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              SizedBox(
+                width: double.infinity,
+                height: 55,
+                child: _isLoading 
+                  ? const Center(child: CircularProgressIndicator())
+                  : ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6B5DE8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      ),
+                      onPressed: _iniciarSesion,
+                      child: const Text("Iniciar sesión", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+              ),
+              const SizedBox(height: 20),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text("¿No tienes cuenta? ", style: TextStyle(color: Colors.black54)),
+                  GestureDetector(
+                    onTap: () => Navigator.pushNamed(context, '/register'),
+                    child: const Text("Regístrate aquí", style: TextStyle(color: Color(0xFF6B5DE8), fontWeight: FontWeight.bold)),
                   ),
-                ),
-                // ... tu botón de Entrar actual ...
-                TextButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/register');
-                  },
-                  child: Text("¿No tienes cuenta? Regístrate aquí", style: TextStyle(color: Color(0xFF6B5DE8))),
-                ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
