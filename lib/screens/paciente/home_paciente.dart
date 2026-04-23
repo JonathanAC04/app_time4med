@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'perfil_paciente.dart'; // Importamos la nueva pantalla de perfil
+import 'agenda_paciente.dart'; // NUEVO
+import 'salud_paciente.dart';
 
 class HomePaciente extends StatefulWidget {
   const HomePaciente({Key? key}) : super(key: key);
@@ -9,14 +11,14 @@ class HomePaciente extends StatefulWidget {
 }
 
 class _HomePacienteState extends State<HomePaciente> {
-  int _selectedIndex = 0; // 0 = Mi Día, 3 = Perfil
+  int _selectedIndex = 0;
 
-  // Esta lista contiene las pantallas que se mostrarán al tocar el menú
+  // ¡AQUÍ CONECTAMOS TODAS LAS PANTALLAS NUEVAS!
   final List<Widget> _pantallas = [
-    const _MiDiaView(), // Pantalla 0: La que ya teníamos
-    const Center(child: Text("Agenda en construcción", style: TextStyle(fontSize: 20))), // Pantalla 1
-    const Center(child: Text("Salud en construcción", style: TextStyle(fontSize: 20))), // Pantalla 2
-    const PerfilPaciente(), // Pantalla 3: El nuevo Perfil
+    const _MiDiaView(),      // Pantalla 0 (Inicio)
+    const AgendaPaciente(),  // Pantalla 1 (Calendario)
+    const SaludPaciente(),   // Pantalla 2 (Salud)
+    const PerfilPaciente(),  // Pantalla 3 (Perfil)
   ];
 
   @override
