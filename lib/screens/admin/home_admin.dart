@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/firestore_service.dart';
 import 'doctores_admin_view.dart';
+import 'pacientes_admin_view.dart';
 
 class HomeAdmin extends StatefulWidget {
   const HomeAdmin({Key? key}) : super(key: key);
@@ -127,7 +128,10 @@ class _HomeAdminState extends State<HomeAdmin> {
             "Administrar Pacientes",
             "Gestiona los pacientes registrados",
             const Color(0xFF6B5DE8),
-            () {},
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PacientesAdminView()),
+            ),
           ),
           _buildBotonAccion(
             Icons.bar_chart_outlined,

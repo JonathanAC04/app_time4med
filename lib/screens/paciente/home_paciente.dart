@@ -60,6 +60,7 @@ class _MiDiaView extends StatefulWidget {
 
 class _MiDiaViewState extends State<_MiDiaView> {
   final FirestoreService _firestoreService = FirestoreService();
+  final String? _uid = FirebaseAuth.instance.currentUser?.uid;
 
   void _abrirModalAgregarMedicamento() {
     final nombreController = TextEditingController();
@@ -245,9 +246,45 @@ class _MiDiaViewState extends State<_MiDiaView> {
             const SizedBox(height: 25),
             const Text("Próximas Tomas", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 15),
-            _buildMedicationCard("08:00", "Atorvastatina", "1 tableta (20mg)", "TOMADO", Colors.teal, Icons.check_circle_outline),
-            _buildMedicationCard("10:00", "Metformina", "1 tableta (850mg)", "POSPUESTO", Colors.orange, Icons.error_outline),
-            _buildMedicationCard("14:00", "Vitamina D3", "1 cápsula (2000 UI)", "PENDIENTE", Colors.indigoAccent, Icons.radio_button_unchecked),
+            if (_uid == null)
+              const Center(child: Text("Inicia sesión para ver tus medicamentos.", style: TextStyle(color: Colors.grey)))
+            else
+              StreamBuilder(
+                stream: _firestoreService.getMedicamentosStream(_uid!),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator(color: Color(0xFF6B5DE8)));
+                  }
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: Text(
+                          "No tienes medicamentos registrados.\nPresiona + para agregar uno.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey, fontSize: 14),
+                        ),
+                      ),
+                    );
+                  }
+                  final docs = snapshot.data!.docs;
+                  return Column(
+                    children: docs.map((doc) {
+                      final rawData = doc.data();
+                      if (rawData == null) return const SizedBox.shrink();
+                      final data = rawData as Map<String, dynamic>;
+                      return _buildMedicationCard(
+                        data['hora'] ?? '',
+                        data['nombre'] ?? '',
+                        data['dosis'] ?? '',
+                        "PENDIENTE",
+                        Colors.indigoAccent,
+                        Icons.radio_button_unchecked,
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
             const SizedBox(height: 60), // Espacio para el botón flotante
           ],
         ),
