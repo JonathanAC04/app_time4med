@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/firestore_service.dart';
 import 'perfil_paciente.dart'; // Importamos la nueva pantalla de perfil
 import 'agenda_paciente.dart'; // NUEVO
 import 'salud_paciente.dart';
@@ -48,9 +50,154 @@ class _HomePacienteState extends State<HomePaciente> {
   }
 }
 
-// --- AQUÍ GUARDAMOS TU DISEÑO ANTERIOR DE "MI DÍA" ---
-class _MiDiaView extends StatelessWidget {
+// --- VISTA "MI DÍA" ---
+class _MiDiaView extends StatefulWidget {
   const _MiDiaView({Key? key}) : super(key: key);
+
+  @override
+  _MiDiaViewState createState() => _MiDiaViewState();
+}
+
+class _MiDiaViewState extends State<_MiDiaView> {
+  final FirestoreService _firestoreService = FirestoreService();
+
+  void _abrirModalAgregarMedicamento() {
+    final nombreController = TextEditingController();
+    final dosisController = TextEditingController();
+    final horaController = TextEditingController();
+    bool isLoading = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 24,
+                right: 24,
+                top: 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Nuevo Medicamento",
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: nombreController,
+                    decoration: const InputDecoration(
+                      labelText: "Nombre del medicamento",
+                      prefixIcon: Icon(Icons.medication_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: dosisController,
+                    decoration: const InputDecoration(
+                      labelText: "Dosis (ej. 1 tableta 20mg)",
+                      prefixIcon: Icon(Icons.scale_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: horaController,
+                    decoration: const InputDecoration(
+                      labelText: "Hora (ej. 08:00)",
+                      prefixIcon: Icon(Icons.access_time),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6B5DE8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                      ),
+                      onPressed: isLoading
+                          ? null
+                          : () async {
+                              final nombre = nombreController.text.trim();
+                              final dosis = dosisController.text.trim();
+                              final hora = horaController.text.trim();
+
+                              if (nombre.isEmpty || dosis.isEmpty || hora.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("Por favor completa todos los campos"),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                                return;
+                              }
+
+                              setModalState(() => isLoading = true);
+
+                              try {
+                                final uid = FirebaseAuth.instance.currentUser?.uid;
+                                if (uid == null) throw Exception("Usuario no autenticado");
+
+                                await _firestoreService.addMedicamento(uid, nombre, dosis, hora);
+
+                                if (ctx.mounted) Navigator.pop(ctx);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("✅ Medicamento guardado exitosamente"),
+                                      backgroundColor: Color(0xFF6B5DE8),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                setModalState(() => isLoading = false);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text("❌ Error al guardar: $e"),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                      child: isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              "Guardar Medicamento",
+                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,7 +253,7 @@ class _MiDiaView extends StatelessWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {},
+        onPressed: _abrirModalAgregarMedicamento,
         backgroundColor: const Color(0xFF6B5DE8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
         child: const Icon(Icons.add, color: Colors.white, size: 30),

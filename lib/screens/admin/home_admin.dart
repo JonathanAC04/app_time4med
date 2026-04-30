@@ -1,127 +1,193 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/firestore_service.dart';
+import 'doctores_admin_view.dart';
 
 class HomeAdmin extends StatefulWidget {
+  const HomeAdmin({Key? key}) : super(key: key);
+
   @override
   _HomeAdminState createState() => _HomeAdminState();
 }
 
 class _HomeAdminState extends State<HomeAdmin> {
   int _selectedIndex = 0;
+  final FirestoreService _firestoreService = FirestoreService();
+  int _totalDoctores = 0;
+  int _totalPacientes = 0;
+  bool _loadingStats = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStats();
+  }
+
+  Future<void> _loadStats() async {
+    final doctores = await _firestoreService.countUsersByRole('doctor');
+    final pacientes = await _firestoreService.countUsersByRole('paciente');
+    if (mounted) {
+      setState(() {
+        _totalDoctores = doctores;
+        _totalPacientes = pacientes;
+        _loadingStats = false;
+      });
+    }
+  }
+
+  void _cerrarSesion() async {
+    await FirebaseAuth.instance.signOut();
+    if (mounted) Navigator.pushReplacementNamed(context, '/login');
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
-      appBar: _buildAppBar(context),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Estadísticas del Sistema", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            SizedBox(height: 15),
-            _buildEstadisticasGrid(),
-            SizedBox(height: 30),
-            Text("Acciones Rápidas", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            SizedBox(height: 15),
-            _buildBotonAccion(Icons.person_add_alt_1, "Registrar Nuevo Doctor", Colors.blueGrey),
-            _buildBotonAccion(Icons.assignment_ind, "Asignar Pacientes", Colors.blueGrey),
-            _buildBotonAccion(Icons.bar_chart, "Ver Reportes Generales", Colors.blueGrey),
-          ],
-        ),
-      ),
+      appBar: _buildAppBar(),
+      body: _buildBody(),
       bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
-  AppBar _buildAppBar(BuildContext context) {
+  AppBar _buildAppBar() {
     return AppBar(
-      backgroundColor: Colors.blueGrey.shade900,
+      backgroundColor: const Color(0xFF6B5DE8),
       elevation: 0,
-      title: Text("Administración", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      title: const Text(
+        "Panel de Administración",
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      ),
       centerTitle: true,
       actions: [
         IconButton(
-          icon: Icon(Icons.logout, color: Colors.white),
-          onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+          icon: const Icon(Icons.logout, color: Colors.white),
+          tooltip: "Cerrar sesión",
+          onPressed: _cerrarSesion,
         ),
       ],
     );
   }
 
-  Widget _buildEstadisticasGrid() {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            children: [
-              _buildStatCard("Doctores", "45", Icons.medical_services, Colors.teal),
-              SizedBox(height: 15),
-              _buildStatCard("Alertas", "3", Icons.error_outline, Colors.redAccent),
-            ],
-          ),
-        ),
-        SizedBox(width: 15),
-        Expanded(
-          child: _buildStatCard("Pacientes Activos", "1,204", Icons.groups, Colors.indigo, altura: 175),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(String titulo, String valor, IconData icono, Color color, {double altura = 80}) {
-    return Container(
-      height: altura,
-      padding: EdgeInsets.all(15),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.shade200)),
+  Widget _buildBody() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20.0),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(icono, color: color, size: 28),
-              if (altura > 80) Text(valor, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: color)),
-            ],
+          // Resumen del sistema
+          const Text(
+            "Resumen del Sistema",
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
-          if (altura <= 80) Spacer(),
-          if (altura > 80) Spacer(),
-          if (altura <= 80) Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(titulo, style: TextStyle(color: Colors.grey, fontSize: 13)),
-              Text(valor, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ],
+          const SizedBox(height: 15),
+          _loadingStats
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF6B5DE8)))
+              : Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        "Doctores",
+                        _totalDoctores.toString(),
+                        Icons.medical_services_outlined,
+                        Colors.teal,
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: _buildStatCard(
+                        "Pacientes",
+                        _totalPacientes.toString(),
+                        Icons.groups_outlined,
+                        const Color(0xFF6B5DE8),
+                      ),
+                    ),
+                  ],
+                ),
+          const SizedBox(height: 30),
+
+          // Opciones principales
+          const Text(
+            "Administración",
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
-          if (altura > 80) Text(titulo, style: TextStyle(color: Colors.grey, fontSize: 16)),
+          const SizedBox(height: 15),
+          _buildBotonAccion(
+            Icons.medical_services_outlined,
+            "Administrar Doctores",
+            "Gestiona el equipo médico",
+            Colors.teal,
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const DoctoresAdminView()),
+            ),
+          ),
+          _buildBotonAccion(
+            Icons.groups_outlined,
+            "Administrar Pacientes",
+            "Gestiona los pacientes registrados",
+            const Color(0xFF6B5DE8),
+            () {},
+          ),
+          _buildBotonAccion(
+            Icons.bar_chart_outlined,
+            "Ver Reportes Generales",
+            "Estadísticas y métricas del sistema",
+            Colors.indigo,
+            () {},
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildBotonAccion(IconData icono, String texto, Color color) {
+  Widget _buildStatCard(String titulo, String valor, IconData icono, Color color) {
     return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: color,
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          elevation: 0,
-          side: BorderSide(color: Colors.grey.shade300)
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+            child: Icon(icono, color: color, size: 26),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            valor,
+            style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: color),
+          ),
+          const SizedBox(height: 4),
+          Text(titulo, style: const TextStyle(color: Colors.grey, fontSize: 14)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBotonAccion(IconData icono, String titulo, String subtitulo, Color color, VoidCallback onTap) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+          child: Icon(icono, color: color, size: 24),
         ),
-        onPressed: () {},
-        child: Row(
-          children: [
-            Icon(icono, size: 24),
-            SizedBox(width: 15),
-            Text(texto, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87)),
-            Spacer(),
-            Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-          ],
-        ),
+        title: Text(titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        subtitle: Text(subtitulo, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+        onTap: onTap,
       ),
     );
   }
@@ -130,12 +196,12 @@ class _HomeAdminState extends State<HomeAdmin> {
     return BottomNavigationBar(
       currentIndex: _selectedIndex,
       onTap: (index) => setState(() => _selectedIndex = index),
-      selectedItemColor: Colors.blueGrey.shade900,
+      selectedItemColor: const Color(0xFF6B5DE8),
       unselectedItemColor: Colors.grey,
-      items: [
-        BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: "Panel"),
-        BottomNavigationBarItem(icon: Icon(Icons.manage_accounts), label: "Usuarios"),
-        BottomNavigationBarItem(icon: Icon(Icons.settings), label: "Ajustes"),
+      items: const [
+        BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), label: "Panel"),
+        BottomNavigationBarItem(icon: Icon(Icons.manage_accounts_outlined), label: "Usuarios"),
+        BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: "Ajustes"),
       ],
     );
   }
