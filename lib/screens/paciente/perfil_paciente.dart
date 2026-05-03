@@ -1,12 +1,143 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-class PerfilPaciente extends StatelessWidget {
+class PerfilPaciente extends StatefulWidget {
   const PerfilPaciente({Key? key}) : super(key: key);
 
-  void _cerrarSesion(BuildContext context) async {
+  @override
+  _PerfilPacienteState createState() => _PerfilPacienteState();
+}
+
+class _PerfilPacienteState extends State<PerfilPaciente> {
+  void _cerrarSesion() async {
     await FirebaseAuth.instance.signOut();
-    Navigator.pushReplacementNamed(context, '/login');
+    if (mounted) Navigator.pushReplacementNamed(context, '/login');
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF6B5DE8),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  void _abrirAjustes() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Ajustes", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            _buildAjusteTile(Icons.notifications_outlined, "Notificaciones", "Gestionar alertas de medicamentos", () {
+              Navigator.pop(ctx);
+              _showSnackBar("Notificaciones: próximamente configurable.");
+            }),
+            _buildAjusteTile(Icons.lock_outline, "Privacidad y seguridad", "Cambiar contraseña y permisos", () {
+              Navigator.pop(ctx);
+              _showSnackBar("Privacidad: próximamente configurable.");
+            }),
+            _buildAjusteTile(Icons.language_outlined, "Idioma", "Español (España)", () {
+              Navigator.pop(ctx);
+              _showSnackBar("Idioma: próximamente configurable.");
+            }),
+            _buildAjusteTile(Icons.help_outline, "Ayuda y soporte", "Preguntas frecuentes", () {
+              Navigator.pop(ctx);
+              _showSnackBar("Soporte: próximamente disponible.");
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  ListTile _buildAjusteTile(IconData icon, String title, String subtitle, VoidCallback onTap) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(color: const Color(0xFFF3F0FF), borderRadius: BorderRadius.circular(10)),
+        child: Icon(icon, color: const Color(0xFF6B5DE8)),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
+    );
+  }
+
+  void _abrirEditarPerfil() {
+    final nombreController = TextEditingController(text: "Alejandro González");
+    final telefonoController = TextEditingController(text: "+34 600 123 456");
+    final pesoController = TextEditingController(text: "78.5");
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          left: 24,
+          right: 24,
+          top: 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("Editar Perfil", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: nombreController,
+              decoration: const InputDecoration(labelText: "Nombre completo", prefixIcon: Icon(Icons.person_outline)),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: telefonoController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: "Teléfono de contacto", prefixIcon: Icon(Icons.phone_outlined)),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: pesoController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: "Peso (kg)", prefixIcon: Icon(Icons.scale_outlined), suffixText: "kg"),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6B5DE8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                ),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _showSnackBar("✅ Perfil actualizado correctamente.");
+                },
+                child: const Text("Guardar Cambios", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -17,9 +148,14 @@ class PerfilPaciente extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.black), onPressed: () {}),
+        automaticallyImplyLeading: false,
         title: const Text("Perfil del Usuario", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        actions: [IconButton(icon: const Icon(Icons.settings_outlined, color: Colors.black), onPressed: () {})],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, color: Colors.black),
+            onPressed: _abrirAjustes,
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
@@ -48,7 +184,10 @@ class PerfilPaciente extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text("DATOS DEL PACIENTE", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
-                const Text("Ver Todo", style: TextStyle(color: Color(0xFF6B5DE8), fontWeight: FontWeight.bold)),
+                GestureDetector(
+                  onTap: () => _showSnackBar("Mostrando todos los datos del paciente."),
+                  child: const Text("Ver Todo", style: TextStyle(color: Color(0xFF6B5DE8), fontWeight: FontWeight.bold)),
+                ),
               ],
             ),
             const SizedBox(height: 15),
@@ -77,7 +216,10 @@ class PerfilPaciente extends StatelessWidget {
                       ],
                     ),
                   ),
-                  IconButton(icon: const Icon(Icons.phone_outlined, color: Color(0xFFFF4C79)), onPressed: () {}),
+                  IconButton(
+                    icon: const Icon(Icons.phone_outlined, color: Color(0xFFFF4C79)),
+                    onPressed: () => _showSnackBar("📞 Llamando a contacto de emergencia..."),
+                  ),
                 ],
               ),
             ),
@@ -91,7 +233,7 @@ class PerfilPaciente extends StatelessWidget {
                 icon: const Icon(Icons.edit_outlined, color: Colors.black87),
                 label: const Text("Editar Información Personal", style: TextStyle(color: Colors.black87, fontSize: 16)),
                 style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), side: BorderSide(color: Colors.grey.shade300)),
-                onPressed: () {},
+                onPressed: _abrirEditarPerfil,
               ),
             ),
             const SizedBox(height: 30),
@@ -102,7 +244,7 @@ class PerfilPaciente extends StatelessWidget {
               child: TextButton.icon(
                 icon: const Icon(Icons.logout, color: Colors.red),
                 label: const Text("Cerrar Sesión", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
-                onPressed: () => _cerrarSesion(context),
+                onPressed: _cerrarSesion,
               ),
             )
           ],
