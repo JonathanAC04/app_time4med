@@ -244,32 +244,6 @@ class _RecetaMedicaScreenState extends State<RecetaMedicaScreen> {
           ],
         ),
         centerTitle: true,
-        actions: [
-          IconButton(
-            tooltip: "Notificaciones",
-            icon: const Icon(Icons.notifications_outlined, color: Colors.black),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const NotificacionesPaciente()),
-              );
-            },
-          ),
-          IconButton(
-            tooltip: "Perfil",
-            icon: const CircleAvatar(
-              backgroundColor: Color(0xFFEEEEEE),
-              child: Icon(Icons.person, color: Colors.black54),
-            ),
-            onPressed: widget.onGoToProfile != null
-                ? () {
-                    Navigator.pop(context);
-                    widget.onGoToProfile!();
-                  }
-                : null,
-          ),
-        ],
       ),
       body: _loadingUser
           ? const Center(
