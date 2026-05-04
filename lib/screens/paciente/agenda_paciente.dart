@@ -1,17 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/firestore_service.dart';
+import '../../utils/date_helpers.dart';
 import 'receta_medica_screen.dart';
+import 'notificaciones_paciente.dart';
 
 class AgendaPaciente extends StatefulWidget {
-  const AgendaPaciente({Key? key}) : super(key: key);
+  final VoidCallback? onGoToProfile;
+
+  const AgendaPaciente({this.onGoToProfile, Key? key}) : super(key: key);
 
   @override
   _AgendaPacienteState createState() => _AgendaPacienteState();
 }
 
 class _AgendaPacienteState extends State<AgendaPaciente> {
-  int _selectedDay = 24;
-  int _currentMonth = 5;
-  int _currentYear = 2024;
+  final FirestoreService _firestoreService = FirestoreService();
+  final String? _uid = FirebaseAuth.instance.currentUser?.uid;
+
+  late int _selectedDay;
+  late int _currentMonth;
+  late int _currentYear;
+  bool _showAllMonth = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _selectedDay = now.day;
+    _currentMonth = now.month;
+    _currentYear = now.year;
+  }
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -43,10 +62,24 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
         elevation: 0,
         title: const Text("CALENDARIO", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
         centerTitle: true,
+        leading: IconButton(
+          tooltip: "Notificaciones",
+          icon: const Icon(Icons.notifications_outlined, color: Colors.black),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificacionesPaciente()),
+            );
+          },
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_none, color: Colors.black),
-            onPressed: () => _showSnackBar("No tienes nuevas notificaciones."),
+            tooltip: "Perfil",
+            icon: const CircleAvatar(
+              backgroundColor: Color(0xFFEEEEEE),
+              child: Icon(Icons.person, color: Colors.black54),
+            ),
+            onPressed: widget.onGoToProfile,
           ),
         ],
       ),
@@ -72,6 +105,7 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
                       onTap: () => setState(() {
                         if (_currentMonth == 1) { _currentMonth = 12; _currentYear--; } else { _currentMonth--; }
                         _selectedDay = 1;
+                        _showAllMonth = false;
                       }),
                       child: Container(decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), shape: BoxShape.circle), child: const Padding(padding: EdgeInsets.all(8.0), child: Icon(Icons.chevron_left, size: 20))),
                     ),
@@ -80,6 +114,7 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
                       onTap: () => setState(() {
                         if (_currentMonth == 12) { _currentMonth = 1; _currentYear++; } else { _currentMonth++; }
                         _selectedDay = 1;
+                        _showAllMonth = false;
                       }),
                       child: Container(decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), shape: BoxShape.circle), child: const Padding(padding: EdgeInsets.all(8.0), child: Icon(Icons.chevron_right, size: 20))),
                     ),
@@ -93,23 +128,91 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
             _buildCalendario(),
             const SizedBox(height: 30),
 
-            // Lista de Horarios
+            // Encabezado de lista
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("HORARIOS - ${_getMonthShort(_currentMonth)} $_selectedDay", style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                Text(
+                  _showAllMonth
+                      ? "TODOS - ${_getMonthShort(_currentMonth)} $_currentYear"
+                      : "HORARIOS - ${_getMonthShort(_currentMonth)} $_selectedDay",
+                  style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                ),
                 GestureDetector(
-                  onTap: () => _showSnackBar("Mostrando todos los horarios del mes."),
-                  child: const Text("Ver todos", style: TextStyle(color: Color(0xFF6B5DE8), fontWeight: FontWeight.bold)),
+                  onTap: () => setState(() => _showAllMonth = !_showAllMonth),
+                  child: Text(
+                    _showAllMonth ? "Ver por día" : "Ver todos",
+                    style: const TextStyle(color: Color(0xFF6B5DE8), fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 15),
 
-            // Tarjetas de medicamentos (tapeables → RecetaMédica)
-            _buildAgendaCard("08:00 AM", "Atorvastatina", "Dosis: 1 comprimido (20mg)", "Tomado", Icons.check_circle_outline, Colors.black),
-            _buildAgendaCard("14:30 PM", "Ibuprofeno 600", "Dosis: 1 cápsula blanda", "Pospuesto", Icons.error_outline, Colors.black),
-            _buildAgendaCard("21:00 PM", "Metformina", "Dosis: 1 comprimido (850mg)", "Pendiente", Icons.timer_outlined, const Color(0xFF6B5DE8), isSelected: true),
+            // Lista dinámica de medicamentos
+            if (_uid == null)
+              const Center(child: Text("Inicia sesión para ver tus medicamentos.", style: TextStyle(color: Colors.grey)))
+            else
+              StreamBuilder<dynamic>(
+                stream: _firestoreService.getMedicamentosStream(_uid!),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator(color: Color(0xFF6B5DE8)));
+                  }
+
+                  final allDocs = (snapshot.hasData && snapshot.data != null)
+                      ? snapshot.data!.docs as List
+                      : <dynamic>[];
+
+                  // Filtrar por día o mes usando comparación de fechas
+                  List filteredDocs;
+                  if (_showAllMonth) {
+                    filteredDocs = allDocs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final dt = parseDate(data['fecha'] as String?);
+                      return dt != null && dt.year == _currentYear && dt.month == _currentMonth;
+                    }).toList();
+                  } else {
+                    filteredDocs = allDocs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final dt = parseDate(data['fecha'] as String?);
+                      return dt != null &&
+                          dt.year == _currentYear &&
+                          dt.month == _currentMonth &&
+                          dt.day == _selectedDay;
+                    }).toList();
+                  }
+
+                  if (filteredDocs.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: Text(
+                          _showAllMonth
+                              ? "No hay medicamentos para este mes."
+                              : "No hay medicamentos para este día.",
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.grey, fontSize: 14),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return Column(
+                    children: filteredDocs.map((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final status = (data['status'] as String?) ?? 'PENDIENTE';
+                      return _buildAgendaCard(
+                        data['hora'] ?? '',
+                        data['nombre'] ?? '',
+                        data['dosis'] ?? '',
+                        status,
+                        doc.id,
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
 
             const SizedBox(height: 20),
 
@@ -120,7 +223,11 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6B5DE8), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                 onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const RecetaMedicaScreen()));
+                  Navigator.push(context, MaterialPageRoute(
+                    builder: (context) => RecetaMedicaScreen(
+                      onGoToProfile: widget.onGoToProfile,
+                    ),
+                  ));
                 },
                 child: const Text("Ver receta actual", style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
               ),
@@ -128,25 +235,55 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
             const SizedBox(height: 15),
 
             // Tarjeta de progreso
-            Container(
-              padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(color: const Color(0xFFF3F0FF), borderRadius: BorderRadius.circular(15)),
-              child: const Row(
-                children: [
-                  Icon(Icons.check_circle, color: Color(0xFF6B5DE8), size: 40),
-                  SizedBox(width: 15),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Progreso de hoy", style: TextStyle(color: Color(0xFF6B5DE8), fontWeight: FontWeight.bold)),
-                        Text("Has completado el 66% de tu tratamiento diario.", style: TextStyle(color: Color(0xFF6B5DE8), fontSize: 12)),
-                      ],
-                    ),
+            _uid == null
+                ? const SizedBox.shrink()
+                : StreamBuilder<dynamic>(
+                    stream: _firestoreService.getMedicamentosStream(_uid!),
+                    builder: (context, snapshot) {
+                      final allDocs = (snapshot.hasData && snapshot.data != null)
+                          ? snapshot.data!.docs as List
+                          : <dynamic>[];
+                      final todayDocs = allDocs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final dt = parseDate(data['fecha'] as String?);
+                        return dt != null &&
+                            dt.year == _currentYear &&
+                            dt.month == _currentMonth &&
+                            dt.day == _selectedDay;
+                      }).toList();
+                      final total = todayDocs.length;
+                      final tomados = todayDocs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        return (data['status'] as String?) == 'TOMADO';
+                      }).length;
+                      final pct = total > 0 ? ((tomados / total) * 100).round() : 0;
+
+                      return Container(
+                        padding: const EdgeInsets.all(15),
+                        decoration: BoxDecoration(color: const Color(0xFFF3F0FF), borderRadius: BorderRadius.circular(15)),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.check_circle, color: Color(0xFF6B5DE8), size: 40),
+                            const SizedBox(width: 15),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text("Progreso del día seleccionado", style: TextStyle(color: Color(0xFF6B5DE8), fontWeight: FontWeight.bold)),
+                                  Text(
+                                    total > 0
+                                        ? "Has completado el $pct% ($tomados de $total) de tu tratamiento."
+                                        : "Sin medicamentos para este día.",
+                                    style: const TextStyle(color: Color(0xFF6B5DE8), fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                ],
-              ),
-            ),
             const SizedBox(height: 80),
           ],
         ),
@@ -163,6 +300,8 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
     const List<String> dias = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
     final int daysInMonth = DateTime(_currentYear, _currentMonth + 1, 0).day;
     final int firstWeekday = DateTime(_currentYear, _currentMonth, 1).weekday; // 1=Mon
+    final now = DateTime.now();
+    final todayDay = (now.year == _currentYear && now.month == _currentMonth) ? now.day : -1;
 
     List<List<int?>> weeks = [];
     List<int?> currentWeek = List.filled(7, null);
@@ -191,22 +330,35 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: week.map((day) {
-              final bool isSelected = day == _selectedDay;
+              final bool isSelected = day == _selectedDay && !_showAllMonth;
+              final bool isToday = day == todayDay;
               return GestureDetector(
-                onTap: day != null ? () => setState(() => _selectedDay = day) : null,
+                onTap: day != null ? () => setState(() {
+                  _selectedDay = day;
+                  _showAllMonth = false;
+                }) : null,
                 child: Container(
                   width: 35,
                   height: 35,
                   decoration: BoxDecoration(
                     color: isSelected ? const Color(0xFF6B5DE8) : null,
                     shape: BoxShape.circle,
+                    border: isToday && !isSelected
+                        ? Border.all(color: const Color(0xFF6B5DE8), width: 1.5)
+                        : null,
                   ),
                   child: Center(
                     child: Text(
                       day?.toString() ?? '',
                       style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.black,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected
+                            ? Colors.white
+                            : isToday
+                                ? const Color(0xFF6B5DE8)
+                                : Colors.black,
+                        fontWeight: (isSelected || isToday)
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                       ),
                     ),
                   ),
@@ -219,10 +371,33 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
     );
   }
 
-  Widget _buildAgendaCard(String time, String title, String subtitle, String status, IconData statusIcon, Color statusColor, {bool isSelected = false}) {
+  Widget _buildAgendaCard(String time, String title, String subtitle, String status, String docId) {
+    Color statusColor;
+    IconData statusIcon;
+    bool isSelected = false;
+
+    switch (status) {
+      case 'TOMADO':
+        statusColor = Colors.green;
+        statusIcon = Icons.check_circle_outline;
+        break;
+      case 'POSPUESTO':
+        statusColor = Colors.orange;
+        statusIcon = Icons.error_outline;
+        break;
+      default:
+        statusColor = const Color(0xFF6B5DE8);
+        statusIcon = Icons.timer_outlined;
+        isSelected = true;
+    }
+
     return GestureDetector(
       onTap: () {
-        Navigator.push(context, MaterialPageRoute(builder: (context) => const RecetaMedicaScreen()));
+        Navigator.push(context, MaterialPageRoute(
+          builder: (context) => RecetaMedicaScreen(
+            onGoToProfile: widget.onGoToProfile,
+          ),
+        ));
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 15),
