@@ -8,7 +8,14 @@ class SaludPaciente extends StatefulWidget {
 }
 
 class _SaludPacienteState extends State<SaludPaciente> {
-  static const List<String> _meses = [
+  static const List<String> _guardianes = [
+    '🐶', '🐱', '🐻', '🐼', '🦁', '🐯', '🦊', '🐺', '🦝', '🐸',
+  ];
+  static const List<String> _nombresGuardianes = [
+    'Perro', 'Gato', 'Oso', 'Panda', 'León', 'Tigre', 'Zorro', 'Lobo', 'Mapache', 'Rana',
+  ];
+
+  int _guardianIndex = 0;
     'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
     'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE',
   ];
@@ -39,6 +46,65 @@ class _SaludPacienteState extends State<SaludPaciente> {
         backgroundColor: const Color(0xFF6B5DE8),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  void _abrirCambiarGuardian() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Elige tu Guardián",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text("Tu guardián te acompaña en tu racha de adherencia",
+                style: TextStyle(color: Colors.grey, fontSize: 13)),
+            const SizedBox(height: 20),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 5,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: _guardianes.length,
+              itemBuilder: (_, i) => GestureDetector(
+                onTap: () {
+                  setState(() => _guardianIndex = i);
+                  Navigator.pop(ctx);
+                  _showSnackBar("¡Guardián cambiado a ${_nombresGuardianes[i]}!");
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: _guardianIndex == i
+                        ? const Color(0xFFF3F0FF)
+                        : const Color(0xFFFFF0F5),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _guardianIndex == i
+                          ? const Color(0xFF6B5DE8)
+                          : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(_guardianes[i],
+                        style: const TextStyle(fontSize: 28)),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
@@ -151,6 +217,17 @@ class _SaludPacienteState extends State<SaludPaciente> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        title: const Text("PROGRESO",
+            style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5)),
+        centerTitle: true,
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -209,7 +286,7 @@ class _SaludPacienteState extends State<SaludPaciente> {
               ),
               const SizedBox(height: 20),
 
-              // Días de Racha
+              // Días de Racha + Guardián
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(20)),
@@ -226,27 +303,54 @@ class _SaludPacienteState extends State<SaludPaciente> {
                         ],
                       ),
                     ),
-                    // Mascota guardián
-                    Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: const Color(0xFFFFF0F5), borderRadius: BorderRadius.circular(15)), child: const Column(children: [Icon(Icons.pets, size: 40, color: Colors.brown), SizedBox(height: 5), Text("TU GUARDIÁN", style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold))]))
+                    // Mascota guardián con opción de cambio
+                    GestureDetector(
+                      onTap: _abrirCambiarGuardian,
+                      child: Container(
+                        padding: const EdgeInsets.all(15),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF0F5),
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(color: const Color(0xFFFFD6E0)),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(_guardianes[_guardianIndex],
+                                style: const TextStyle(fontSize: 36)),
+                            const SizedBox(height: 5),
+                            Text("TU GUARDIÁN", style: const TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFE4E1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text("Cambiar", style: TextStyle(color: Colors.redAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 30),
 
               // Resumen Semanal
-              const Row(
+              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(children: [Icon(Icons.check_circle_outline, color: Color(0xFF6B5DE8), size: 20), SizedBox(width: 8), Text("RESUMEN SEMANAL", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2))]),
-                  Text("Actualizado hoy 08:30 AM", style: TextStyle(color: Color(0xFF6B5DE8), fontSize: 10)),
+                  const Row(children: [Icon(Icons.check_circle_outline, color: Color(0xFF6B5DE8), size: 20), SizedBox(width: 8), Text("RESUMEN SEMANAL", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2))]),
+                  Text("Período: $_periodoActual", style: const TextStyle(color: Color(0xFF6B5DE8), fontSize: 10)),
                 ],
               ),
               const SizedBox(height: 15),
               _buildResumenRow(Icons.medication, "Dosis tomadas", "24", "/ 28"),
               _buildResumenRow(Icons.calendar_month, "Días completos", "6", "/ 7"),
+              _buildResumenRow(Icons.trending_up, "Racha actual", "12", "días"),
+              _buildResumenRow(Icons.star_outline, "Cumplimiento", "85", "%"),
 
-              const SizedBox(height: 30),
-              const Text("Hoy es Viernes, 15 de Diciembre", style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 80), // Espacio para el FAB
             ],
           ),

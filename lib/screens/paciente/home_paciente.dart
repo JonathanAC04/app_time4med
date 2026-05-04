@@ -91,6 +91,265 @@ class _MiDiaViewState extends State<_MiDiaView> {
 
   String _todayStr() => formatDateToString(DateTime.now());
 
+  void _abrirMenuAgregar() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("¿Qué deseas agregar?",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F0FF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.medication_outlined,
+                    color: Color(0xFF6B5DE8), size: 28),
+              ),
+              title: const Text("Agregar próxima toma",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              subtitle: const Text("Registra un medicamento programado",
+                  style: TextStyle(color: Colors.grey, fontSize: 12)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(ctx);
+                _abrirModalAgregarMedicamento();
+              },
+            ),
+            const Divider(),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF0F5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.calendar_month,
+                    color: Color(0xFFFF4C79), size: 28),
+              ),
+              title: const Text("Agregar próxima cita médica",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              subtitle: const Text("Agenda una visita con el doctor",
+                  style: TextStyle(color: Colors.grey, fontSize: 12)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(ctx);
+                _abrirModalAgregarCita();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _abrirModalAgregarCita() {
+    final motivoController = TextEditingController();
+    DateTime? selectedFecha;
+    TimeOfDay? selectedHora;
+    bool isLoading = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 24,
+                right: 24,
+                top: 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Nueva Cita Médica",
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Fecha
+                  InkWell(
+                    borderRadius: BorderRadius.circular(15),
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: DateTime.now(),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 730)),
+                        builder: (context, child) => Theme(
+                          data: ThemeData.light().copyWith(
+                            colorScheme: const ColorScheme.light(primary: Color(0xFFFF4C79)),
+                          ),
+                          child: child!,
+                        ),
+                      );
+                      if (date != null) {
+                        setModalState(() => selectedFecha = date);
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: "Fecha de la cita",
+                        prefixIcon: Icon(Icons.calendar_month, color: Color(0xFFFF4C79)),
+                      ),
+                      child: Text(
+                        selectedFecha != null
+                            ? "${selectedFecha!.day.toString().padLeft(2, '0')}/${selectedFecha!.month.toString().padLeft(2, '0')}/${selectedFecha!.year}"
+                            : "Seleccionar fecha",
+                        style: TextStyle(
+                          color: selectedFecha != null ? Colors.black87 : Colors.grey,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Hora
+                  InkWell(
+                    borderRadius: BorderRadius.circular(15),
+                    onTap: () async {
+                      final time = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.now(),
+                        builder: (context, child) => Theme(
+                          data: ThemeData.light().copyWith(
+                            colorScheme: const ColorScheme.light(primary: Color(0xFFFF4C79)),
+                          ),
+                          child: child!,
+                        ),
+                      );
+                      if (time != null) {
+                        setModalState(() => selectedHora = time);
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: "Hora de la cita",
+                        prefixIcon: Icon(Icons.access_time, color: Color(0xFFFF4C79)),
+                      ),
+                      child: Text(
+                        selectedHora != null
+                            ? "${selectedHora!.hour.toString().padLeft(2, '0')}:${selectedHora!.minute.toString().padLeft(2, '0')}"
+                            : "Seleccionar hora",
+                        style: TextStyle(
+                          color: selectedHora != null ? Colors.black87 : Colors.grey,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Motivo
+                  TextField(
+                    controller: motivoController,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: "Motivo de la cita",
+                      prefixIcon: Icon(Icons.notes_outlined, color: Color(0xFFFF4C79)),
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF4C79),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                      ),
+                      onPressed: isLoading
+                          ? null
+                          : () async {
+                              final motivo = motivoController.text.trim();
+                              if (selectedFecha == null ||
+                                  selectedHora == null ||
+                                  motivo.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("Por favor completa todos los campos"),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                                return;
+                              }
+
+                              setModalState(() => isLoading = true);
+
+                              try {
+                                final uid = FirebaseAuth.instance.currentUser?.uid;
+                                if (uid == null) throw Exception("Usuario no autenticado");
+
+                                await _firestoreService.addCita(
+                                    uid, selectedFecha!, selectedHora!, motivo);
+
+                                if (ctx.mounted) Navigator.pop(ctx);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("✅ Cita guardada exitosamente"),
+                                      backgroundColor: Color(0xFFFF4C79),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                setModalState(() => isLoading = false);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text("❌ Error al guardar: $e"),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                      child: isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              "Guardar Cita",
+                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _abrirModalAgregarMedicamento() {
     final nombreController = TextEditingController();
     String? selectedDosis;
@@ -457,6 +716,66 @@ class _MiDiaViewState extends State<_MiDiaView> {
                             status,
                           );
                         }).toList(),
+                      const SizedBox(height: 25),
+                      // --- Próximas Citas ---
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("Próximas Citas",
+                              style: TextStyle(
+                                  fontSize: 20, fontWeight: FontWeight.bold)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF0F5),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.calendar_month,
+                                color: Color(0xFFFF4C79), size: 16),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 15),
+                      StreamBuilder<dynamic>(
+                        stream: _firestoreService.getCitasStream(_uid!),
+                        builder: (context, citasSnap) {
+                          if (citasSnap.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Center(
+                                child: CircularProgressIndicator(
+                                    color: Color(0xFFFF4C79)));
+                          }
+                          final citas = (citasSnap.hasData &&
+                                  citasSnap.data!.docs != null)
+                              ? citasSnap.data!.docs as List
+                              : <dynamic>[];
+                          if (citas.isEmpty) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              child: Center(
+                                child: Text(
+                                  "No tienes citas próximas.\nPresiona + para agregar una.",
+                                  textAlign: TextAlign.center,
+                                  style:
+                                      TextStyle(color: Colors.grey, fontSize: 14),
+                                ),
+                              ),
+                            );
+                          }
+                          return Column(
+                            children: citas.map((doc) {
+                              final data =
+                                  doc.data() as Map<String, dynamic>;
+                              return _buildCitaCard(
+                                data['fecha'] ?? '',
+                                data['hora'] ?? '',
+                                data['motivo'] ?? '',
+                              );
+                            }).toList(),
+                          );
+                        },
+                      ),
                       const SizedBox(height: 60),
                     ],
                   ),
@@ -464,7 +783,7 @@ class _MiDiaViewState extends State<_MiDiaView> {
               },
             ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _abrirModalAgregarMedicamento,
+        onPressed: _abrirMenuAgregar,
         backgroundColor: const Color(0xFF6B5DE8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
         child: const Icon(Icons.add, color: Colors.white, size: 30),
@@ -565,6 +884,83 @@ class _MiDiaViewState extends State<_MiDiaView> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCitaCard(String fecha, String hora, String motivo) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: const Color(0xFFFFD6E0)),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Container(
+              width: 6,
+              decoration: const BoxDecoration(
+                color: Color(0xFFFF4C79),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(15),
+                  bottomLeft: Radius.circular(15),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(15.0),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF0F5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.local_hospital_outlined,
+                          color: Color(0xFFFF4C79), size: 24),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(motivo,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15)),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.calendar_today,
+                                  size: 12, color: Colors.grey),
+                              const SizedBox(width: 4),
+                              Text(fecha,
+                                  style: const TextStyle(
+                                      color: Colors.grey, fontSize: 12)),
+                              const SizedBox(width: 10),
+                              const Icon(Icons.access_time,
+                                  size: 12, color: Color(0xFFFF4C79)),
+                              const SizedBox(width: 4),
+                              Text(hora,
+                                  style: const TextStyle(
+                                      color: Color(0xFFFF4C79),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

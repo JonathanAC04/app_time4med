@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart' show TimeOfDay;
 import '../utils/date_helpers.dart';
 
 class FirestoreService {
@@ -88,6 +89,28 @@ class FirestoreService {
         .collection('medicamentos')
         .doc(docId)
         .delete();
+  }
+
+  // Agrega una cita médica a la subcolección del paciente
+  Future<void> addCita(
+      String uid, DateTime fecha, TimeOfDay hora, String motivo) async {
+    await _db.collection('users').doc(uid).collection('citas').add({
+      'fecha': formatDateToString(fecha),
+      'hora': '${hora.hour.toString().padLeft(2, '0')}:${hora.minute.toString().padLeft(2, '0')}',
+      'fechaHora': Timestamp.fromDate(DateTime(fecha.year, fecha.month, fecha.day, hora.hour, hora.minute)),
+      'motivo': motivo,
+      'creado': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // Stream en tiempo real de las citas del paciente (ordenadas por fechaHora)
+  Stream<QuerySnapshot> getCitasStream(String uid) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('citas')
+        .orderBy('fechaHora', descending: false)
+        .snapshots();
   }
 
   // Obtiene el conteo de usuarios por rol
