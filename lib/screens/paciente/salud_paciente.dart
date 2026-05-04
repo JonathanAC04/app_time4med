@@ -16,6 +16,8 @@ class _SaludPacienteState extends State<SaludPaciente> {
   ];
 
   int _guardianIndex = 0;
+
+  static const List<String> _meses = [
     'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
     'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE',
   ];
