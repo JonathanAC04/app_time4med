@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/firestore_service.dart';
 import '../../utils/date_helpers.dart';
 import 'perfil_paciente.dart';
@@ -602,7 +603,7 @@ class _MiDiaViewState extends State<_MiDiaView> {
           ? const Center(
               child: Text("Inicia sesión para ver tus medicamentos.",
                   style: TextStyle(color: Colors.grey)))
-          : StreamBuilder<dynamic>(
+          : StreamBuilder<QuerySnapshot>(
               stream: _firestoreService.getMedicamentosStream(_uid!),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -737,7 +738,7 @@ class _MiDiaViewState extends State<_MiDiaView> {
                         ],
                       ),
                       const SizedBox(height: 15),
-                      StreamBuilder<dynamic>(
+                      StreamBuilder<QuerySnapshot>(
                         stream: _firestoreService.getCitasStream(_uid!),
                         builder: (context, citasSnap) {
                           if (citasSnap.connectionState ==
@@ -748,8 +749,8 @@ class _MiDiaViewState extends State<_MiDiaView> {
                           }
                           final citas = (citasSnap.hasData &&
                                   citasSnap.data!.docs != null)
-                              ? citasSnap.data!.docs as List
-                              : <dynamic>[];
+                              ? citasSnap.data!.docs
+                              : <QueryDocumentSnapshot>[];
                           if (citas.isEmpty) {
                             return const Padding(
                               padding: EdgeInsets.symmetric(vertical: 16),

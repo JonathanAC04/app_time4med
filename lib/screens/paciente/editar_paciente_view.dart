@@ -19,6 +19,7 @@ class _EditarPacienteViewState extends State<EditarPacienteView> {
       TextEditingController(text: "María G.");
   final _contactoEmergenciaTelController =
       TextEditingController(text: "+34 600 123 456");
+  late final TextEditingController _fechaNacimientoController;
 
   // State
   String _sexo = "Masculino";
@@ -34,6 +35,8 @@ class _EditarPacienteViewState extends State<EditarPacienteView> {
   @override
   void initState() {
     super.initState();
+    _fechaNacimientoController =
+        TextEditingController(text: _formatFecha(_fechaNacimiento));
     _calcularIMC();
     _pesoController.addListener(_calcularIMC);
     _estaturaController.addListener(_calcularIMC);
@@ -47,6 +50,7 @@ class _EditarPacienteViewState extends State<EditarPacienteView> {
     _estaturaController.dispose();
     _contactoEmergenciaNombreController.dispose();
     _contactoEmergenciaTelController.dispose();
+    _fechaNacimientoController.dispose();
     super.dispose();
   }
 
@@ -89,7 +93,12 @@ class _EditarPacienteViewState extends State<EditarPacienteView> {
         child: child!,
       ),
     );
-    if (picked != null) setState(() => _fechaNacimiento = picked);
+    if (picked != null) {
+      setState(() {
+        _fechaNacimiento = picked;
+        _fechaNacimientoController.text = _formatFecha(picked);
+      });
+    }
   }
 
   String _formatFecha(DateTime? d) {
@@ -197,8 +206,7 @@ class _EditarPacienteViewState extends State<EditarPacienteView> {
                               borderSide:
                                   BorderSide(color: Colors.grey.shade200)),
                         ),
-                        controller: TextEditingController(
-                            text: _formatFecha(_fechaNacimiento)),
+                        controller: _fechaNacimientoController,
                       ),
                     ),
                   ),
