@@ -52,12 +52,16 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
     return months[month - 1];
   }
 
-  String _selectedDateStr() {
-    return "${_currentYear.toString().padLeft(4, '0')}-${_currentMonth.toString().padLeft(2, '0')}-${_selectedDay.toString().padLeft(2, '0')}";
-  }
-
-  String _currentMonthPrefix() {
-    return "${_currentYear.toString().padLeft(4, '0')}-${_currentMonth.toString().padLeft(2, '0')}";
+  /// Parses a stored fecha string "YYYY-MM-DD" into a DateTime (returns null on failure).
+  DateTime? _parseDate(String? fechaStr) {
+    if (fechaStr == null) return null;
+    try {
+      final parts = fechaStr.split('-');
+      if (parts.length != 3) return null;
+      return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
@@ -171,21 +175,22 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
                       ? snapshot.data!.docs as List
                       : <dynamic>[];
 
-                  // Filtrar por día o mes
+                  // Filtrar por día o mes usando comparación de fechas
                   List filteredDocs;
                   if (_showAllMonth) {
-                    final monthPrefix = _currentMonthPrefix();
                     filteredDocs = allDocs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
-                      final fecha = data['fecha'] as String?;
-                      return fecha != null && fecha.startsWith(monthPrefix);
+                      final dt = _parseDate(data['fecha'] as String?);
+                      return dt != null && dt.year == _currentYear && dt.month == _currentMonth;
                     }).toList();
                   } else {
-                    final selectedStr = _selectedDateStr();
                     filteredDocs = allDocs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
-                      final fecha = data['fecha'] as String?;
-                      return fecha != null && fecha == selectedStr;
+                      final dt = _parseDate(data['fecha'] as String?);
+                      return dt != null &&
+                          dt.year == _currentYear &&
+                          dt.month == _currentMonth &&
+                          dt.day == _selectedDay;
                     }).toList();
                   }
 
@@ -249,11 +254,13 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
                       final allDocs = (snapshot.hasData && snapshot.data != null)
                           ? snapshot.data!.docs as List
                           : <dynamic>[];
-                      final selectedStr = _selectedDateStr();
                       final todayDocs = allDocs.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
-                        final fecha = data['fecha'] as String?;
-                        return fecha != null && fecha == selectedStr;
+                        final dt = _parseDate(data['fecha'] as String?);
+                        return dt != null &&
+                            dt.year == _currentYear &&
+                            dt.month == _currentMonth &&
+                            dt.day == _selectedDay;
                       }).toList();
                       final total = todayDocs.length;
                       final tomados = todayDocs.where((doc) {

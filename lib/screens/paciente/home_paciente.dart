@@ -358,12 +358,12 @@ class _MiDiaViewState extends State<_MiDiaView> {
                         ? snapshot.data!.docs as List
                         : <dynamic>[];
 
-                // Filtrar meds de hoy
+                // Filtrar meds de hoy (solo los que tienen fecha asignada para hoy)
                 final today = _todayStr();
                 final todayDocs = docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
                   final fecha = data['fecha'] as String?;
-                  if (fecha == null) return true; // Meds sin fecha → siempre visibles
+                  if (fecha == null) return false; // Meds sin fecha no se muestran como de hoy
                   return fecha == today;
                 }).toList();
 
