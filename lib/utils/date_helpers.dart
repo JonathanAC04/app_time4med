@@ -16,6 +16,8 @@ String formatTimeToString(DateTime date) {
 
 /// Parses a "YYYY-MM-DD" string into a DateTime.
 /// Returns null if the string is null or cannot be parsed.
+/// All parse errors are intentionally suppressed — callers treat invalid/missing
+/// dates the same way (excluded from filters).
 DateTime? parseDate(String? fechaStr) {
   if (fechaStr == null) return null;
   try {
@@ -23,6 +25,7 @@ DateTime? parseDate(String? fechaStr) {
     if (parts.length != 3) return null;
     return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
   } catch (_) {
+    // Return null for any unparseable value so callers skip the record gracefully.
     return null;
   }
 }

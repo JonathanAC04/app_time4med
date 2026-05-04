@@ -361,7 +361,7 @@ class _MiDiaViewState extends State<_MiDiaView> {
                 final todayDocs = docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
                   final fecha = data['fecha'] as String?;
-                  if (fecha == null) return false; // Meds sin fecha no se muestran como de hoy
+                  if (fecha == null) return false; // Medications without a date are not shown as today's
                   return fecha == today;
                 }).toList();
 
