@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/date_helpers.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -34,10 +35,8 @@ class FirestoreService {
   // Agrega un medicamento a la subcolección del paciente
   Future<void> addMedicamento(
       String uid, String nombre, String dosis, DateTime fechaHora) async {
-    final fecha =
-        "${fechaHora.year.toString().padLeft(4, '0')}-${fechaHora.month.toString().padLeft(2, '0')}-${fechaHora.day.toString().padLeft(2, '0')}";
-    final hora =
-        "${fechaHora.hour.toString().padLeft(2, '0')}:${fechaHora.minute.toString().padLeft(2, '0')}";
+    final fecha = formatDateToString(fechaHora);
+    final hora = formatTimeToString(fechaHora);
     await _db.collection('users').doc(uid).collection('medicamentos').add({
       'nombre': nombre,
       'dosis': dosis,

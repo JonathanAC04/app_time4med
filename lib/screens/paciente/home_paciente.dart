@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/firestore_service.dart';
+import '../../utils/date_helpers.dart';
 import 'perfil_paciente.dart';
 import 'agenda_paciente.dart';
 import 'salud_paciente.dart';
@@ -88,10 +89,7 @@ class _MiDiaViewState extends State<_MiDiaView> {
     'Otro',
   ];
 
-  String _todayStr() {
-    final now = DateTime.now();
-    return "${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-  }
+  String _todayStr() => formatDateToString(DateTime.now());
 
   void _abrirModalAgregarMedicamento() {
     final nombreController = TextEditingController();

@@ -233,10 +233,10 @@ class _RecetaMedicaScreenState extends State<RecetaMedicaScreen> {
         ),
         title: Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.shield_outlined, color: Color(0xFF6B5DE8)),
-            SizedBox(width: 8),
-            Text("RECETA MÉDICA",
+          children: [
+            const Icon(Icons.shield_outlined, color: Color(0xFF6B5DE8)),
+            const SizedBox(width: 8),
+            const Text("RECETA MÉDICA",
                 style: TextStyle(
                     color: Colors.black,
                     fontWeight: FontWeight.bold,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/firestore_service.dart';
+import '../../utils/date_helpers.dart';
 import 'receta_medica_screen.dart';
 import 'notificaciones_paciente.dart';
 
@@ -50,18 +51,6 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
   String _getMonthShort(int month) {
     const months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
     return months[month - 1];
-  }
-
-  /// Parses a stored fecha string "YYYY-MM-DD" into a DateTime (returns null on failure).
-  DateTime? _parseDate(String? fechaStr) {
-    if (fechaStr == null) return null;
-    try {
-      final parts = fechaStr.split('-');
-      if (parts.length != 3) return null;
-      return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-    } catch (_) {
-      return null;
-    }
   }
 
   @override
@@ -180,13 +169,13 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
                   if (_showAllMonth) {
                     filteredDocs = allDocs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
-                      final dt = _parseDate(data['fecha'] as String?);
+                      final dt = parseDate(data['fecha'] as String?);
                       return dt != null && dt.year == _currentYear && dt.month == _currentMonth;
                     }).toList();
                   } else {
                     filteredDocs = allDocs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
-                      final dt = _parseDate(data['fecha'] as String?);
+                      final dt = parseDate(data['fecha'] as String?);
                       return dt != null &&
                           dt.year == _currentYear &&
                           dt.month == _currentMonth &&
@@ -256,7 +245,7 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
                           : <dynamic>[];
                       final todayDocs = allDocs.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
-                        final dt = _parseDate(data['fecha'] as String?);
+                        final dt = parseDate(data['fecha'] as String?);
                         return dt != null &&
                             dt.year == _currentYear &&
                             dt.month == _currentMonth &&
