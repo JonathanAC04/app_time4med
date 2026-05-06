@@ -34,11 +34,11 @@ class FirestoreService {
   }
 
   // Agrega un medicamento a la subcolección del paciente
-  Future<void> addMedicamento(
+  Future<String> addMedicamento(
       String uid, String nombre, String dosis, DateTime fechaHora) async {
     final fecha = formatDateToString(fechaHora);
     final hora = formatTimeToString(fechaHora);
-    await _db.collection('users').doc(uid).collection('medicamentos').add({
+    final docRef = await _db.collection('users').doc(uid).collection('medicamentos').add({
       'nombre': nombre,
       'dosis': dosis,
       'hora': hora,
@@ -47,6 +47,7 @@ class FirestoreService {
       'status': 'PENDIENTE',
       'creado': FieldValue.serverTimestamp(),
     });
+    return docRef.id;
   }
 
   // Stream en tiempo real de los medicamentos del paciente
@@ -92,15 +93,16 @@ class FirestoreService {
   }
 
   // Agrega una cita médica a la subcolección del paciente
-  Future<void> addCita(
+  Future<String> addCita(
       String uid, DateTime fecha, TimeOfDay hora, String motivo) async {
-    await _db.collection('users').doc(uid).collection('citas').add({
+    final docRef = await _db.collection('users').doc(uid).collection('citas').add({
       'fecha': formatDateToString(fecha),
       'hora': '${hora.hour.toString().padLeft(2, '0')}:${hora.minute.toString().padLeft(2, '0')}',
       'fechaHora': Timestamp.fromDate(DateTime(fecha.year, fecha.month, fecha.day, hora.hour, hora.minute)),
       'motivo': motivo,
       'creado': FieldValue.serverTimestamp(),
     });
+    return docRef.id;
   }
 
   // Stream en tiempo real de las citas del paciente (ordenadas por fechaHora)
@@ -111,6 +113,32 @@ class FirestoreService {
         .collection('citas')
         .orderBy('fechaHora', descending: false)
         .snapshots();
+  }
+
+  Future<QuerySnapshot> getMedicamentosOnce(String uid) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('medicamentos')
+        .orderBy('creado', descending: false)
+        .get();
+  }
+
+  Future<QuerySnapshot> getCitasOnce(String uid) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('citas')
+        .orderBy('fechaHora', descending: false)
+        .get();
+  }
+
+  Stream<DocumentSnapshot<Map<String, dynamic>>> getUserStream(String uid) {
+    return _db.collection('users').doc(uid).snapshots();
+  }
+
+  Future<void> updateUserData(String uid, Map<String, dynamic> data) async {
+    await _db.collection('users').doc(uid).set(data, SetOptions(merge: true));
   }
 
   // Obtiene el conteo de usuarios por rol
