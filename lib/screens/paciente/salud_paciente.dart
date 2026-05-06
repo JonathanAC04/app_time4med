@@ -207,6 +207,7 @@ class _SaludPacienteState extends State<SaludPaciente> {
                   return dayDocs.every((d) => ((d.data() as Map<String, dynamic>)['status'] as String?) == 'TOMADO');
                 }).length;
                 final racha = _rachaActual(docs);
+                final totalDiasMes = DateTime(_periodoActual.year, _periodoActual.month + 1, 0).day;
 
                 return SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
@@ -324,7 +325,7 @@ class _SaludPacienteState extends State<SaludPaciente> {
                       ),
                       const SizedBox(height: 15),
                       _buildResumenRow(Icons.medication, "Dosis tomadas", "$dosisTomadas", "/ $totalDosis"),
-                      _buildResumenRow(Icons.calendar_month, "Días completos", "$diasCompletos", "/ ${porDia.length}"),
+                      _buildResumenRow(Icons.calendar_month, "Días completos", "$diasCompletos", "/ $totalDiasMes"),
                       _buildResumenRow(Icons.trending_up, "Racha actual", "$racha", "días"),
                       _buildResumenRow(Icons.star_outline, "Cumplimiento", "$cumplimiento", "%"),
                       const SizedBox(height: 80),
