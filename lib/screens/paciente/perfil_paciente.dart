@@ -114,7 +114,8 @@ class _PerfilPacienteState extends State<PerfilPaciente> {
     if (value == null || value.isEmpty) return null;
     try {
       return base64Decode(value);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('No se pudo decodificar fotoPerfilBase64: $e');
       return null;
     }
   }
