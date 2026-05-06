@@ -42,6 +42,13 @@ class _PerfilPacienteState extends State<PerfilPaciente> {
 
     final bytes = await image.readAsBytes();
     final base64 = base64Encode(bytes);
+    if (base64.length > 350000) {
+      if (mounted) {
+        _showSnackBar("❌ La imagen es demasiado grande. Elige una más ligera.",
+            color: Colors.red);
+      }
+      return;
+    }
     await _firestoreService.updateUserData(_uid!, {'fotoPerfilBase64': base64});
     if (mounted) _showSnackBar("✅ Foto de perfil actualizada.");
   }

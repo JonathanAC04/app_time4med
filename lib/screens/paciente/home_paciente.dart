@@ -644,7 +644,7 @@ class _MiDiaViewState extends State<_MiDiaView> {
       if (fechaHora == null) continue;
       final medMinute =
           DateTime(fechaHora.year, fechaHora.month, fechaHora.day, fechaHora.hour, fechaHora.minute);
-      final key = '${doc.id}-${formatDateToString(medMinute)}-${formatTimeToString(medMinute)}';
+      final key = '${doc.id}-${medMinute.millisecondsSinceEpoch}';
 
       if (medMinute == nowMinute && !_shownExactReminderKeys.contains(key)) {
         _shownExactReminderKeys.add(key);

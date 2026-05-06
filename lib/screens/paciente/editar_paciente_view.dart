@@ -62,8 +62,9 @@ class _EditarPacienteViewState extends State<EditarPacienteView> {
         final m = int.tryParse(parts[1]);
         final y = int.tryParse(parts[2]);
         if (d != null && m != null && y != null && d > 0 && m > 0 && m <= 12) {
-          final parsed = DateTime(y, m, d);
-          if (parsed.year == y && parsed.month == m && parsed.day == d) {
+          final maxDay = DateTime(y, m + 1, 0).day;
+          if (d <= maxDay) {
+            final parsed = DateTime(y, m, d);
             _fechaNacimiento = parsed;
           }
         }

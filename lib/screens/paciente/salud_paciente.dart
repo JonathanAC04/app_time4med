@@ -143,7 +143,7 @@ class _SaludPacienteState extends State<SaludPaciente> {
 
     var streak = 0;
     var cursor = DateTime.now();
-    while (true) {
+    while (streak < 365) {
       final key = formatDateToString(cursor);
       final dayDocs = porDia[key];
       if (dayDocs == null || dayDocs.isEmpty) break;
