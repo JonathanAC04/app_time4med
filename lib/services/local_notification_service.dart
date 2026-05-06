@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
@@ -23,7 +24,8 @@ class LocalNotificationService {
     try {
       final name = await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(name));
-    } catch (_) {
+    } catch (e) {
+      debugPrint('No se pudo obtener zona horaria local, usando UTC: $e');
       tz.setLocalLocation(tz.getLocation('UTC'));
     }
 
@@ -135,6 +137,7 @@ class LocalNotificationService {
 
   int _baseId(String uid, String type, String itemId) {
     final raw = '$uid-$type-$itemId'.hashCode.abs();
+    // Se reserva espacio para offsets +0..+3 de cada grupo de recordatorios.
     return (raw % 100000000) * 10;
   }
 }

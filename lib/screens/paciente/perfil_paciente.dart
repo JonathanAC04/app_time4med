@@ -185,7 +185,8 @@ class _PerfilPacienteState extends State<PerfilPaciente> {
                       color: const Color(0xFFE8F5E9),
                       borderRadius: BorderRadius.circular(15),
                     ),
-                    child: const Text("ASIGNADO", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                    child: Text("ASIGNADO",
+                        style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.bold)),
                   ),
                 const SizedBox(height: 30),
                 Row(

@@ -102,7 +102,7 @@ class _MiDiaViewState extends State<_MiDiaView> {
   void initState() {
     super.initState();
     _sincronizarNotificaciones();
-    _exactReminderTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _exactReminderTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       _maybeShowExactTimeReminder();
     });
   }
@@ -142,8 +142,8 @@ class _MiDiaViewState extends State<_MiDiaView> {
           fechaHora: fechaHora,
         );
       }
-    } catch (_) {
-      // Ignorado: si falla la sincronización inicial, se vuelven a programar al crear/editar.
+    } catch (e) {
+      debugPrint('Error al sincronizar notificaciones: $e');
     }
   }
 
@@ -667,7 +667,8 @@ class _MiDiaViewState extends State<_MiDiaView> {
   }) async {
     if (!mounted) return;
     _isReminderModalOpen = true;
-    await showModalBottomSheet(
+    try {
+      await showModalBottomSheet(
       context: context,
       isDismissible: true,
       shape: const RoundedRectangleBorder(
@@ -738,7 +739,9 @@ class _MiDiaViewState extends State<_MiDiaView> {
         ),
       ),
     );
-    _isReminderModalOpen = false;
+    } finally {
+      _isReminderModalOpen = false;
+    }
   }
 
   void _abrirModalPosponerToma({

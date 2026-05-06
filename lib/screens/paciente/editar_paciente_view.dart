@@ -217,9 +217,9 @@ class _EditarPacienteViewState extends State<EditarPacienteView> {
                 ),
               ],
               const SizedBox(height: 12),
-              _field(_contactoEmergenciaNombreController, "Nombre contacto emergencia"),
+              _field(_contactoEmergenciaNombreController, "Nombre contacto emergencia", requiredField: false),
               const SizedBox(height: 12),
-              _field(_contactoEmergenciaTelController, "Teléfono emergencia"),
+              _field(_contactoEmergenciaTelController, "Teléfono emergencia", requiredField: false),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -238,11 +238,14 @@ class _EditarPacienteViewState extends State<EditarPacienteView> {
     );
   }
 
-  Widget _field(TextEditingController controller, String label, {TextInputType? keyboardType}) {
+  Widget _field(TextEditingController controller, String label,
+      {TextInputType? keyboardType, bool requiredField = true}) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
-      validator: (v) => (v == null || v.trim().isEmpty) ? "Campo requerido" : null,
+      validator: requiredField
+          ? (v) => (v == null || v.trim().isEmpty) ? "Campo requerido" : null
+          : null,
       decoration: InputDecoration(labelText: label),
     );
   }

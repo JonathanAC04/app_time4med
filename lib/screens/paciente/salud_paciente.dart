@@ -269,10 +269,10 @@ class _SaludPacienteState extends State<SaludPaciente> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(children: const [
-                                    Icon(Icons.local_fire_department, color: Colors.redAccent),
-                                    SizedBox(width: 5),
-                                    Text("Días de Racha", style: TextStyle(fontWeight: FontWeight.bold)),
+                                  Row(children: [
+                                    const Icon(Icons.local_fire_department, color: Colors.redAccent),
+                                    const SizedBox(width: 5),
+                                    const Text("Días de Racha", style: TextStyle(fontWeight: FontWeight.bold)),
                                   ]),
                                   const SizedBox(height: 15),
                                   Row(
