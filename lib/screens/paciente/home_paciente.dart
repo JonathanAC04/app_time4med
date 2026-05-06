@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
 import '../../services/firestore_service.dart';
+import '../../services/local_notification_service.dart';
 import '../../utils/date_helpers.dart';
 import 'perfil_paciente.dart';
 import 'agenda_paciente.dart';
@@ -74,6 +76,10 @@ class _MiDiaView extends StatefulWidget {
 class _MiDiaViewState extends State<_MiDiaView> {
   final FirestoreService _firestoreService = FirestoreService();
   final String? _uid = FirebaseAuth.instance.currentUser?.uid;
+  Timer? _exactReminderTimer;
+  final Set<String> _shownExactReminderKeys = <String>{};
+  bool _isReminderModalOpen = false;
+  List<QueryDocumentSnapshot> _todayDocsCache = <QueryDocumentSnapshot>[];
 
   static const List<String> _dosisOpciones = [
     '1 tableta (10mg)',
@@ -91,6 +97,68 @@ class _MiDiaViewState extends State<_MiDiaView> {
   ];
 
   String _todayStr() => formatDateToString(DateTime.now());
+
+  @override
+  void initState() {
+    super.initState();
+    _sincronizarNotificaciones();
+    _exactReminderTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _maybeShowExactTimeReminder();
+    });
+  }
+
+  @override
+  void dispose() {
+    _exactReminderTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _sincronizarNotificaciones() async {
+    if (_uid == null) return;
+    try {
+      final medsSnap = await _firestoreService.getMedicamentosOnce(_uid!);
+      for (final doc in medsSnap.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final fechaHora = _extractFechaHora(data);
+        if (fechaHora == null) continue;
+        await LocalNotificationService.instance.scheduleMedicamentoReminders(
+          uid: _uid!,
+          medicamentoId: doc.id,
+          nombre: (data['nombre'] as String?) ?? 'Medicamento',
+          dosis: (data['dosis'] as String?) ?? '',
+          fechaHora: fechaHora,
+        );
+      }
+
+      final citasSnap = await _firestoreService.getCitasOnce(_uid!);
+      for (final doc in citasSnap.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final fechaHora = _extractFechaHora(data);
+        if (fechaHora == null) continue;
+        await LocalNotificationService.instance.scheduleCitaReminders(
+          uid: _uid!,
+          citaId: doc.id,
+          motivo: (data['motivo'] as String?) ?? 'Cita médica',
+          fechaHora: fechaHora,
+        );
+      }
+    } catch (_) {
+      // Ignorado: si falla la sincronización inicial, se vuelven a programar al crear/editar.
+    }
+  }
+
+  DateTime? _extractFechaHora(Map<String, dynamic> data) {
+    final timestamp = data['fechaHora'];
+    if (timestamp is Timestamp) return timestamp.toDate();
+    final fecha = parseDate(data['fecha'] as String?);
+    final hora = (data['hora'] as String?) ?? '';
+    final parts = hora.split(':');
+    if (fecha == null || parts.length < 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return DateTime(fecha.year, fecha.month, fecha.day, h, m);
+  }
 
   void _abrirMenuAgregar() {
     showModalBottomSheet(
@@ -309,8 +377,22 @@ class _MiDiaViewState extends State<_MiDiaView> {
                                 final uid = FirebaseAuth.instance.currentUser?.uid;
                                 if (uid == null) throw Exception("Usuario no autenticado");
 
-                                await _firestoreService.addCita(
+                                final citaId = await _firestoreService.addCita(
                                     uid, selectedFecha!, selectedHora!, motivo);
+                                final citaFechaHora = DateTime(
+                                  selectedFecha!.year,
+                                  selectedFecha!.month,
+                                  selectedFecha!.day,
+                                  selectedHora!.hour,
+                                  selectedHora!.minute,
+                                );
+                                await LocalNotificationService.instance
+                                    .scheduleCitaReminders(
+                                  uid: uid,
+                                  citaId: citaId,
+                                  motivo: motivo,
+                                  fechaHora: citaFechaHora,
+                                );
 
                                 if (ctx.mounted) Navigator.pop(ctx);
                                 if (mounted) {
@@ -498,8 +580,16 @@ class _MiDiaViewState extends State<_MiDiaView> {
                                 final uid = FirebaseAuth.instance.currentUser?.uid;
                                 if (uid == null) throw Exception("Usuario no autenticado");
 
-                                await _firestoreService.addMedicamento(
+                                final medicamentoId = await _firestoreService.addMedicamento(
                                     uid, nombre, selectedDosis!, selectedFechaHora!);
+                                await LocalNotificationService.instance
+                                    .scheduleMedicamentoReminders(
+                                  uid: uid,
+                                  medicamentoId: medicamentoId,
+                                  nombre: nombre,
+                                  dosis: selectedDosis!,
+                                  fechaHora: selectedFechaHora!,
+                                );
 
                                 if (ctx.mounted) Navigator.pop(ctx);
                                 if (mounted) {
@@ -540,14 +630,201 @@ class _MiDiaViewState extends State<_MiDiaView> {
     );
   }
 
-  Future<void> _cambiarStatus(String docId, String statusActual) async {
+  void _maybeShowExactTimeReminder() {
+    if (_isReminderModalOpen || _todayDocsCache.isEmpty) return;
+    final now = DateTime.now();
+    final nowMinute = DateTime(now.year, now.month, now.day, now.hour, now.minute);
+
+    for (final doc in _todayDocsCache) {
+      final data = doc.data() as Map<String, dynamic>;
+      final status = (data['status'] as String?) ?? 'PENDIENTE';
+      if (status == 'TOMADO' || status == 'NO_TOMADO') continue;
+
+      final fechaHora = _extractFechaHora(data);
+      if (fechaHora == null) continue;
+      final medMinute =
+          DateTime(fechaHora.year, fechaHora.month, fechaHora.day, fechaHora.hour, fechaHora.minute);
+      final key = '${doc.id}-${formatDateToString(medMinute)}-${formatTimeToString(medMinute)}';
+
+      if (medMinute == nowMinute && !_shownExactReminderKeys.contains(key)) {
+        _shownExactReminderKeys.add(key);
+        _abrirModalRecordatorioMedicamento(
+          docId: doc.id,
+          nombre: (data['nombre'] as String?) ?? '',
+          dosis: (data['dosis'] as String?) ?? '',
+          fechaHora: fechaHora,
+        );
+        break;
+      }
+    }
+  }
+
+  Future<void> _abrirModalRecordatorioMedicamento({
+    required String docId,
+    required String nombre,
+    required String dosis,
+    required DateTime fechaHora,
+  }) async {
+    if (!mounted) return;
+    _isReminderModalOpen = true;
+    await showModalBottomSheet(
+      context: context,
+      isDismissible: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Recordatorio de toma",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(
+              nombre,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text("Dosis: $dosis", style: const TextStyle(color: Colors.black87)),
+            const SizedBox(height: 2),
+            Text(
+              "Fecha/Hora: ${formatDateToString(fechaHora)} ${formatTimeToString(fechaHora)}",
+              style: const TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await _actualizarMedicamentoStatus(docId, 'NO_TOMADO');
+                    },
+                    child: const Text("No la tomé"),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _abrirModalPosponerToma(
+                        docId: docId,
+                        nombre: nombre,
+                        dosis: dosis,
+                        fechaHoraBase: fechaHora,
+                      );
+                    },
+                    child: const Text("Posponer"),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6B5DE8)),
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await _actualizarMedicamentoStatus(docId, 'TOMADO');
+                    },
+                    child:
+                        const Text("La tomé", style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    _isReminderModalOpen = false;
+  }
+
+  void _abrirModalPosponerToma({
+    required String docId,
+    required String nombre,
+    required String dosis,
+    required DateTime fechaHoraBase,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Posponer toma",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text("Selecciona cuándo quieres recibir el próximo recordatorio."),
+            const SizedBox(height: 16),
+            _buildPosponerOption(ctx, "15 minutos", () {
+              _posponerMedicamento(docId, nombre, dosis, fechaHoraBase.add(const Duration(minutes: 15)));
+            }),
+            _buildPosponerOption(ctx, "30 minutos", () {
+              _posponerMedicamento(docId, nombre, dosis, fechaHoraBase.add(const Duration(minutes: 30)));
+            }),
+            _buildPosponerOption(ctx, "1 hora", () {
+              _posponerMedicamento(docId, nombre, dosis, fechaHoraBase.add(const Duration(hours: 1)));
+            }),
+            _buildPosponerOption(ctx, "Elegir hora personalizada", () async {
+              final time = await showTimePicker(
+                context: context,
+                initialTime: TimeOfDay.fromDateTime(fechaHoraBase.add(const Duration(minutes: 15))),
+              );
+              if (time == null) return;
+              final now = DateTime.now();
+              final selected = DateTime(now.year, now.month, now.day, time.hour, time.minute);
+              final scheduled = selected.isAfter(now)
+                  ? selected
+                  : selected.add(const Duration(days: 1));
+              _posponerMedicamento(docId, nombre, dosis, scheduled);
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPosponerOption(
+      BuildContext ctx, String title, VoidCallback onPressed) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {
+        Navigator.pop(ctx);
+        onPressed();
+      },
+    );
+  }
+
+  Future<void> _posponerMedicamento(
+      String docId, String nombre, String dosis, DateTime nuevaFechaHora) async {
     if (_uid == null) return;
-    final Map<String, String> ciclo = {
-      'PENDIENTE': 'TOMADO',
-      'TOMADO': 'POSPUESTO',
-      'POSPUESTO': 'PENDIENTE',
-    };
-    final nuevoStatus = ciclo[statusActual] ?? 'PENDIENTE';
+    await _firestoreService.updateMedicamento(_uid!, docId, {
+      'fecha': formatDateToString(nuevaFechaHora),
+      'hora': formatTimeToString(nuevaFechaHora),
+      'fechaHora': Timestamp.fromDate(nuevaFechaHora),
+      'status': 'POSPUESTO',
+    });
+
+    await LocalNotificationService.instance.scheduleMedicamentoReminders(
+      uid: _uid!,
+      medicamentoId: docId,
+      nombre: nombre,
+      dosis: dosis,
+      fechaHora: nuevaFechaHora,
+    );
+  }
+
+  Future<void> _actualizarMedicamentoStatus(String docId, String nuevoStatus) async {
+    if (_uid == null) return;
     try {
       await _firestoreService.updateMedicamentoStatus(_uid!, docId, nuevoStatus);
     } catch (e) {
@@ -624,6 +901,10 @@ class _MiDiaViewState extends State<_MiDiaView> {
                   if (fecha == null) return false; // Medications without a date are not shown as today's
                   return fecha == today;
                 }).toList();
+                _todayDocsCache = todayDocs.cast<QueryDocumentSnapshot>();
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _maybeShowExactTimeReminder();
+                });
 
                 // Calcular progreso
                 final total = todayDocs.length;
@@ -715,6 +996,7 @@ class _MiDiaViewState extends State<_MiDiaView> {
                             data['dosis'] ?? '',
                             doc.id,
                             status,
+                            _extractFechaHora(data),
                           );
                         }).toList(),
                       const SizedBox(height: 25),
@@ -793,7 +1075,7 @@ class _MiDiaViewState extends State<_MiDiaView> {
   }
 
   Widget _buildMedicationCard(
-      String time, String title, String subtitle, String docId, String status) {
+      String time, String title, String subtitle, String docId, String status, DateTime? fechaHora) {
     Color statusColor;
     IconData statusIcon;
     String statusLabel;
@@ -809,6 +1091,11 @@ class _MiDiaViewState extends State<_MiDiaView> {
         statusIcon = Icons.pause_circle_outline;
         statusLabel = 'POSPUESTO';
         break;
+      case 'NO_TOMADO':
+        statusColor = Colors.redAccent;
+        statusIcon = Icons.cancel_outlined;
+        statusLabel = 'NO TOMADO';
+        break;
       default:
         statusColor = const Color(0xFF6B5DE8);
         statusIcon = Icons.radio_button_unchecked;
@@ -816,7 +1103,12 @@ class _MiDiaViewState extends State<_MiDiaView> {
     }
 
     return GestureDetector(
-      onTap: () => _cambiarStatus(docId, status),
+      onTap: () => _abrirModalRecordatorioMedicamento(
+        docId: docId,
+        nombre: title,
+        dosis: subtitle,
+        fechaHora: fechaHora ?? DateTime.now(),
+      ),
       child: Container(
         margin: const EdgeInsets.only(bottom: 15),
         decoration: BoxDecoration(
