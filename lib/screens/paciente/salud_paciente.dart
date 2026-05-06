@@ -132,17 +132,25 @@ class _SaludPacienteState extends State<SaludPaciente> {
   }
 
   int _rachaActual(List<QueryDocumentSnapshot> docs) {
-    final Set<String> diasTomados = docs
-        .where((doc) => ((doc.data() as Map<String, dynamic>)['status'] as String?) == 'TOMADO')
-        .map((doc) {
+    final Map<String, List<QueryDocumentSnapshot>> porDia = {};
+    for (final doc in docs) {
       final data = doc.data() as Map<String, dynamic>;
       final fecha = _fechaMedicamento(data);
-      return fecha != null ? formatDateToString(fecha) : '';
-    }).where((d) => d.isNotEmpty).toSet();
+      if (fecha == null) continue;
+      final key = formatDateToString(fecha);
+      porDia.putIfAbsent(key, () => <QueryDocumentSnapshot>[]).add(doc);
+    }
 
     var streak = 0;
     var cursor = DateTime.now();
-    while (diasTomados.contains(formatDateToString(cursor))) {
+    while (true) {
+      final key = formatDateToString(cursor);
+      final dayDocs = porDia[key];
+      if (dayDocs == null || dayDocs.isEmpty) break;
+      final completo = dayDocs.every(
+        (d) => ((d.data() as Map<String, dynamic>)['status'] as String?) == 'TOMADO',
+      );
+      if (!completo) break;
       streak++;
       cursor = cursor.subtract(const Duration(days: 1));
     }

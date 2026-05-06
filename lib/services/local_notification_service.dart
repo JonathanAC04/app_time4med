@@ -137,7 +137,7 @@ class LocalNotificationService {
 
   int _baseId(String uid, String type, String itemId) {
     final raw = '$uid-$type-$itemId'.hashCode.abs();
-    // Se reserva espacio para offsets +0..+3 de cada grupo de recordatorios.
+    // Se reservan 10 IDs por item; actualmente se usan offsets +0..+3.
     return (raw % 100000000) * 10;
   }
 }

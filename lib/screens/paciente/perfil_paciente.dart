@@ -34,9 +34,9 @@ class _PerfilPacienteState extends State<PerfilPaciente> {
     if (_uid == null) return;
     final image = await _picker.pickImage(
       source: ImageSource.gallery,
-      maxWidth: 512,
-      maxHeight: 512,
-      imageQuality: 70,
+      maxWidth: 256,
+      maxHeight: 256,
+      imageQuality: 60,
     );
     if (image == null) return;
 
