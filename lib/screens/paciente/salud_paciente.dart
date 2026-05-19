@@ -131,14 +131,14 @@ class _SaludPacienteState extends State<SaludPaciente> {
     return fecha;
   }
 
-  int _rachaActual(List<QueryDocumentSnapshot> docs) {
-    final Map<String, List<QueryDocumentSnapshot>> porDia = {};
+  int _rachaActual(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> porDia = {};
     for (final doc in docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       final fecha = _fechaMedicamento(data);
       if (fecha == null) continue;
       final key = formatDateToString(fecha);
-      porDia.putIfAbsent(key, () => <QueryDocumentSnapshot>[]).add(doc);
+      porDia.putIfAbsent(key, () => <QueryDocumentSnapshot<Map<String, dynamic>>>[]).add(doc);
     }
 
     var streak = 0;
@@ -171,7 +171,7 @@ class _SaludPacienteState extends State<SaludPaciente> {
       ),
       body: _uid == null
           ? const Center(child: Text("Inicia sesión para ver tu progreso."))
-          : StreamBuilder<QuerySnapshot>(
+          : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: _firestoreService.getMedicamentosStream(_uid!),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -179,9 +179,9 @@ class _SaludPacienteState extends State<SaludPaciente> {
                       child: CircularProgressIndicator(color: Color(0xFF6B5DE8)));
                 }
 
-                final docs = snapshot.hasData ? snapshot.data!.docs : <QueryDocumentSnapshot>[];
+                final docs = snapshot.data?.docs ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[];
                 final monthDocs = docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
+                  final data = doc.data();
                   final fecha = _fechaMedicamento(data);
                   return fecha != null &&
                       fecha.year == _periodoActual.year &&
@@ -190,18 +190,18 @@ class _SaludPacienteState extends State<SaludPaciente> {
 
                 final totalDosis = monthDocs.length;
                 final dosisTomadas = monthDocs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
+                  final data = doc.data();
                   return (data['status'] as String?) == 'TOMADO';
                 }).length;
                 final cumplimiento = totalDosis > 0 ? ((dosisTomadas / totalDosis) * 100).round() : 0;
 
-                final Map<String, List<QueryDocumentSnapshot>> porDia = {};
+                final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> porDia = {};
                 for (final doc in monthDocs) {
-                  final data = doc.data() as Map<String, dynamic>;
+                  final data = doc.data();
                   final fecha = _fechaMedicamento(data);
                   if (fecha == null) continue;
                   final key = formatDateToString(fecha);
-                  porDia.putIfAbsent(key, () => <QueryDocumentSnapshot>[]).add(doc);
+                  porDia.putIfAbsent(key, () => <QueryDocumentSnapshot<Map<String, dynamic>>>[]).add(doc);
                 }
                 final diasCompletos = porDia.values.where((dayDocs) {
                   return dayDocs.every((d) => ((d.data() as Map<String, dynamic>)['status'] as String?) == 'TOMADO');

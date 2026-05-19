@@ -700,7 +700,11 @@ class _MiDiaViewState extends State<_MiDiaView> {
                   child: OutlinedButton(
                     onPressed: () async {
                       Navigator.pop(ctx);
-                      await _actualizarMedicamentoStatus(docId, 'NO_TOMADO');
+                      await _actualizarMedicamentoStatus(
+                        docId,
+                        'NO_TOMADO',
+                        medicationName: nombre,
+                      );
                     },
                     child: const Text("No la tomé"),
                   ),
@@ -727,7 +731,11 @@ class _MiDiaViewState extends State<_MiDiaView> {
                         backgroundColor: const Color(0xFF6B5DE8)),
                     onPressed: () async {
                       Navigator.pop(ctx);
-                      await _actualizarMedicamentoStatus(docId, 'TOMADO');
+                      await _actualizarMedicamentoStatus(
+                        docId,
+                        'TOMADO',
+                        medicationName: nombre,
+                      );
                     },
                     child:
                         const Text("La tomé", style: TextStyle(color: Colors.white)),
@@ -810,26 +818,74 @@ class _MiDiaViewState extends State<_MiDiaView> {
   Future<void> _posponerMedicamento(
       String docId, String nombre, String dosis, DateTime nuevaFechaHora) async {
     if (_uid == null) return;
-    await _firestoreService.updateMedicamento(_uid!, docId, {
-      'fecha': formatDateToString(nuevaFechaHora),
-      'hora': formatTimeToString(nuevaFechaHora),
-      'fechaHora': Timestamp.fromDate(nuevaFechaHora),
-      'status': 'POSPUESTO',
-    });
+    try {
+      await _firestoreService.updateMedicamento(_uid!, docId, {
+        'fecha': formatDateToString(nuevaFechaHora),
+        'hora': formatTimeToString(nuevaFechaHora),
+        'fechaHora': Timestamp.fromDate(nuevaFechaHora),
+        'status': 'POSPUESTO',
+      });
 
-    await LocalNotificationService.instance.scheduleMedicamentoReminders(
-      uid: _uid!,
-      medicamentoId: docId,
-      nombre: nombre,
-      dosis: dosis,
-      fechaHora: nuevaFechaHora,
-    );
+      await LocalNotificationService.instance.scheduleMedicamentoReminders(
+        uid: _uid!,
+        medicamentoId: docId,
+        nombre: nombre,
+        dosis: dosis,
+        fechaHora: nuevaFechaHora,
+      );
+      await _firestoreService.notifyDoctorMedicationStatus(
+        patientId: _uid!,
+        medicationName: nombre,
+        status: 'POSPUESTO',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⏱️ Medicamento pospuesto correctamente.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error al posponer: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
-  Future<void> _actualizarMedicamentoStatus(String docId, String nuevoStatus) async {
+  Future<void> _actualizarMedicamentoStatus(
+    String docId,
+    String nuevoStatus, {
+    required String medicationName,
+  }) async {
     if (_uid == null) return;
     try {
       await _firestoreService.updateMedicamentoStatus(_uid!, docId, nuevoStatus);
+      if (nuevoStatus == 'NO_TOMADO') {
+        await _firestoreService.notifyDoctorMedicationStatus(
+          patientId: _uid!,
+          medicationName: medicationName,
+          status: nuevoStatus,
+        );
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              nuevoStatus == 'TOMADO'
+                  ? "✅ Toma registrada."
+                  : "⚠️ Estado actualizado: $nuevoStatus",
+            ),
+            backgroundColor:
+                nuevoStatus == 'TOMADO' ? Colors.green : Colors.orange,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -883,7 +939,7 @@ class _MiDiaViewState extends State<_MiDiaView> {
           ? const Center(
               child: Text("Inicia sesión para ver tus medicamentos.",
                   style: TextStyle(color: Colors.grey)))
-          : StreamBuilder<QuerySnapshot>(
+          : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: _firestoreService.getMedicamentosStream(_uid!),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -891,15 +947,12 @@ class _MiDiaViewState extends State<_MiDiaView> {
                       child: CircularProgressIndicator(color: Color(0xFF6B5DE8)));
                 }
 
-                final docs =
-                    (snapshot.hasData && snapshot.data!.docs != null)
-                        ? snapshot.data!.docs as List
-                        : <dynamic>[];
+                final docs = snapshot.data?.docs ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
                 // Filtrar meds de hoy (solo los que tienen fecha asignada para hoy)
                 final today = _todayStr();
-                final todayDocs = docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
+                 final todayDocs = docs.where((doc) {
+                   final data = doc.data();
                   final fecha = data['fecha'] as String?;
                   if (fecha == null) return false; // Medications without a date are not shown as today's
                   return fecha == today;
@@ -911,8 +964,8 @@ class _MiDiaViewState extends State<_MiDiaView> {
 
                 // Calcular progreso
                 final total = todayDocs.length;
-                final tomados = todayDocs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
+                 final tomados = todayDocs.where((doc) {
+                   final data = doc.data();
                   return (data['status'] as String?) == 'TOMADO';
                 }).length;
                 final progress = total > 0 ? tomados / total : 0.0;
@@ -990,7 +1043,7 @@ class _MiDiaViewState extends State<_MiDiaView> {
                         )
                       else
                         ...todayDocs.map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
+                          final data = doc.data();
                           final status =
                               (data['status'] as String?) ?? 'PENDIENTE';
                           return _buildMedicationCard(
@@ -1023,7 +1076,7 @@ class _MiDiaViewState extends State<_MiDiaView> {
                         ],
                       ),
                       const SizedBox(height: 15),
-                      StreamBuilder<QuerySnapshot>(
+                      StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                         stream: _firestoreService.getCitasStream(_uid!),
                         builder: (context, citasSnap) {
                           if (citasSnap.connectionState ==
@@ -1032,10 +1085,8 @@ class _MiDiaViewState extends State<_MiDiaView> {
                                 child: CircularProgressIndicator(
                                     color: Color(0xFFFF4C79)));
                           }
-                          final citas = (citasSnap.hasData &&
-                                  citasSnap.data!.docs != null)
-                              ? citasSnap.data!.docs
-                              : <QueryDocumentSnapshot>[];
+                          final citas = citasSnap.data?.docs ??
+                              <QueryDocumentSnapshot<Map<String, dynamic>>>[];
                           if (citas.isEmpty) {
                             return const Padding(
                               padding: EdgeInsets.symmetric(vertical: 16),
@@ -1051,8 +1102,7 @@ class _MiDiaViewState extends State<_MiDiaView> {
                           }
                           return Column(
                             children: citas.map((doc) {
-                              final data =
-                                  doc.data() as Map<String, dynamic>;
+                              final data = doc.data();
                               return _buildCitaCard(
                                 data['fecha'] ?? '',
                                 data['hora'] ?? '',

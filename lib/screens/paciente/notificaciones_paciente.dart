@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/firestore_service.dart';
 
 class NotificacionesPaciente extends StatefulWidget {
   const NotificacionesPaciente({Key? key}) : super(key: key);
@@ -9,60 +12,67 @@ class NotificacionesPaciente extends StatefulWidget {
 }
 
 class _NotificacionesPacienteState extends State<NotificacionesPaciente> {
-  final List<_NotificacionItem> _notificaciones = [
-    _NotificacionItem(
-      icono: Icons.medication_outlined,
-      titulo: "Hora de tomar tu medicamento",
-      descripcion: "Es hora de tomar tu dosis de Atorvastatina (20mg).",
-      tiempo: "Hace 5 minutos",
-      leida: false,
-      color: const Color(0xFF6B5DE8),
-    ),
-    _NotificacionItem(
-      icono: Icons.check_circle_outline,
-      titulo: "Dosis registrada",
-      descripcion: "Has marcado Metformina como tomada. ¡Buen trabajo!",
-      tiempo: "Hace 2 horas",
-      leida: false,
-      color: Colors.green,
-    ),
-    _NotificacionItem(
-      icono: Icons.calendar_today_outlined,
-      titulo: "Recordatorio de cita",
-      descripcion: "Tienes una cita con tu médico mañana a las 10:00 AM.",
-      tiempo: "Hace 5 horas",
-      leida: true,
-      color: Colors.orange,
-    ),
-    _NotificacionItem(
-      icono: Icons.warning_amber_outlined,
-      titulo: "Medicamento próximo a vencer",
-      descripcion: "Tu tratamiento de Ibuprofeno 600 vence en 3 días.",
-      tiempo: "Ayer",
-      leida: true,
-      color: Colors.redAccent,
-    ),
-    _NotificacionItem(
-      icono: Icons.info_outline,
-      titulo: "Actualización de receta",
-      descripcion: "Tu médico ha actualizado tu receta médica. Revísala.",
-      tiempo: "Hace 2 días",
-      leida: true,
-      color: Colors.blueAccent,
-    ),
-  ];
+  final FirestoreService _firestoreService = FirestoreService();
+  final String? _uid = FirebaseAuth.instance.currentUser?.uid;
 
-  void _marcarTodasLeidas() {
-    setState(() {
-      for (final n in _notificaciones) {
-        n.leida = true;
-      }
-    });
+  Future<void> _marcarTodasLeidas(
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) async {
+    if (_uid == null) return;
+    for (final doc in docs) {
+      final data = doc.data();
+      if ((data['read'] as bool?) == true) continue;
+      await _firestoreService.markUserNotificationAsRead(
+        uid: _uid!,
+        notificationId: doc.id,
+      );
+    }
+  }
+
+  String _formatTiempo(Timestamp? ts) {
+    if (ts == null) return "Ahora";
+    final diff = DateTime.now().difference(ts.toDate());
+    if (diff.inMinutes < 1) return "Hace unos segundos";
+    if (diff.inMinutes < 60) return "Hace ${diff.inMinutes} min";
+    if (diff.inHours < 24) return "Hace ${diff.inHours} h";
+    return "Hace ${diff.inDays} día${diff.inDays > 1 ? 's' : ''}";
+  }
+
+  IconData _iconForType(String type) {
+    switch (type) {
+      case 'DOCTOR_MEDICATION_ASSIGNED':
+      case 'MEDICATION_STATUS_ALERT':
+        return Icons.medication_outlined;
+      case 'DOCTOR_MEDICATION_UPDATED':
+        return Icons.edit_note_outlined;
+      case 'DOCTOR_MEDICATION_DELETED':
+        return Icons.delete_outline;
+      default:
+        return Icons.notifications_outlined;
+    }
+  }
+
+  Color _colorForType(String type) {
+    switch (type) {
+      case 'DOCTOR_MEDICATION_ASSIGNED':
+        return const Color(0xFF6B5DE8);
+      case 'DOCTOR_MEDICATION_UPDATED':
+        return Colors.blueAccent;
+      case 'DOCTOR_MEDICATION_DELETED':
+        return Colors.redAccent;
+      case 'MEDICATION_STATUS_ALERT':
+        return Colors.orange;
+      default:
+        return const Color(0xFF6B5DE8);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final noLeidas = _notificaciones.where((n) => !n.leida).length;
+    if (_uid == null) {
+      return const Scaffold(
+        body: Center(child: Text("Inicia sesión para ver tus notificaciones.")),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -73,162 +83,157 @@ class _NotificacionesPacienteState extends State<NotificacionesPaciente> {
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Notificaciones",
-              style: TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18),
-            ),
-            if (noLeidas > 0)
-              Text(
-                "$noLeidas sin leer",
-                style: const TextStyle(
-                    color: Color(0xFF6B5DE8),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500),
-              ),
-          ],
+        title: const Text(
+          "Notificaciones",
+          style: TextStyle(
+              color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        actions: [
-          if (noLeidas > 0)
-            TextButton(
-              onPressed: _marcarTodasLeidas,
-              child: const Text(
-                "Marcar todas",
-                style: TextStyle(
-                    color: Color(0xFF6B5DE8), fontWeight: FontWeight.bold),
-              ),
-            ),
-        ],
       ),
-      body: _notificaciones.isEmpty
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.notifications_off_outlined,
-                      size: 60, color: Colors.grey),
-                  SizedBox(height: 15),
-                  Text(
-                    "No tienes notificaciones",
-                    style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.all(20),
-              itemCount: _notificaciones.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final notif = _notificaciones[index];
-                return GestureDetector(
-                  onTap: () {
-                    setState(() => notif.leida = true);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(15),
-                    decoration: BoxDecoration(
-                      color: notif.leida
-                          ? Colors.white
-                          : const Color(0xFFF3F0FF),
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(
-                        color: notif.leida
-                            ? Colors.grey.shade200
-                            : const Color(0xFF6B5DE8).withOpacity(0.3),
-                      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: _firestoreService.getUserNotificationsStream(_uid!),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF6B5DE8)),
+            );
+          }
+
+          final docs = snapshot.data?.docs ?? [];
+          final noLeidas =
+              docs.where((d) => (d.data()['read'] as bool?) != true).length;
+
+          return Column(
+            children: [
+              if (noLeidas > 0)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => _marcarTodasLeidas(docs),
+                    child: const Text(
+                      "Marcar todas",
+                      style: TextStyle(
+                          color: Color(0xFF6B5DE8), fontWeight: FontWeight.bold),
                     ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: notif.color.withOpacity(0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(notif.icono,
-                              color: notif.color, size: 24),
+                  ),
+                ),
+              Expanded(
+                child: docs.isEmpty
+                    ? const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.notifications_off_outlined,
+                                size: 60, color: Colors.grey),
+                            SizedBox(height: 15),
+                            Text(
+                              "No tienes notificaciones",
+                              style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(20),
+                        itemCount: docs.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final notif = docs[index].data();
+                          final leida = (notif['read'] as bool?) ?? false;
+                          final tipo = (notif['type'] as String?) ?? '';
+                          final color = _colorForType(tipo);
+                          return GestureDetector(
+                            onTap: () => _firestoreService.markUserNotificationAsRead(
+                              uid: _uid!,
+                              notificationId: docs[index].id,
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.all(15),
+                              decoration: BoxDecoration(
+                                color: leida
+                                    ? Colors.white
+                                    : const Color(0xFFF3F0FF),
+                                borderRadius: BorderRadius.circular(15),
+                                border: Border.all(
+                                  color: leida
+                                      ? Colors.grey.shade200
+                                      : const Color(0xFF6B5DE8).withOpacity(0.3),
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: color.withOpacity(0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(_iconForType(tipo),
+                                        color: color, size: 24),
+                                  ),
+                                  const SizedBox(width: 12),
                                   Expanded(
-                                    child: Text(
-                                      notif.titulo,
-                                      style: TextStyle(
-                                        fontWeight: notif.leida
-                                            ? FontWeight.w500
-                                            : FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                (notif['title'] as String?) ??
+                                                    'Notificación',
+                                                style: TextStyle(
+                                                  fontWeight: leida
+                                                      ? FontWeight.w500
+                                                      : FontWeight.bold,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                            if (!leida)
+                                              Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: const BoxDecoration(
+                                                  color: Color(0xFF6B5DE8),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          (notif['body'] as String?) ?? '',
+                                          style: TextStyle(
+                                              color: Colors.grey.shade600,
+                                              fontSize: 13),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          _formatTiempo(
+                                              notif['createdAt'] as Timestamp?),
+                                          style: const TextStyle(
+                                              color: Colors.grey,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  if (!notif.leida)
-                                    Container(
-                                      width: 8,
-                                      height: 8,
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFF6B5DE8),
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
                                 ],
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                notif.descripcion,
-                                style: TextStyle(
-                                    color: Colors.grey.shade600,
-                                    fontSize: 13),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                notif.tiempo,
-                                style: const TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
-}
-
-class _NotificacionItem {
-  final IconData icono;
-  final String titulo;
-  final String descripcion;
-  final String tiempo;
-  bool leida;
-  final Color color;
-
-  _NotificacionItem({
-    required this.icono,
-    required this.titulo,
-    required this.descripcion,
-    required this.tiempo,
-    required this.leida,
-    required this.color,
-  });
 }
