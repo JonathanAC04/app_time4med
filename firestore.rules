@@ -1,15 +1,64 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{uid} {
-      // Any authenticated user can read user documents (needed for admin stats)
-      allow read: if request.auth != null;
-      // Only the owner can write their own user document
-      allow write: if request.auth != null && request.auth.uid == uid;
+    function isAuthenticated() {
+      return request.auth != null;
+    }
 
-      // Only the owner can read and write their own subcollections (e.g. medicamentos)
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function isDoctor(uid) {
+      return isAuthenticated() && userDoc(uid).data.rol == 'doctor';
+    }
+
+    function isAssignedDoctor(patientUid) {
+      return isDoctor(request.auth.uid) &&
+        userDoc(patientUid).data.doctorId == request.auth.uid;
+    }
+
+    function isPatientUpdatingOwnDoctorNotification(doctorUid) {
+      return isAuthenticated() &&
+        request.auth.uid != doctorUid &&
+        userDoc(request.auth.uid).data.rol == 'paciente' &&
+        userDoc(request.auth.uid).data.doctorId == doctorUid;
+    }
+
+    match /users/{uid} {
+      // Owner can read/write their document.
+      // Doctor can read assigned patient profile.
+      allow read: if isAuthenticated() &&
+        (request.auth.uid == uid || isAssignedDoctor(uid));
+      allow write: if isAuthenticated() && request.auth.uid == uid;
+
+      match /medicamentos/{docId} {
+        allow read: if isAuthenticated() &&
+          (request.auth.uid == uid || isAssignedDoctor(uid));
+        allow write: if isAuthenticated() &&
+          (request.auth.uid == uid || isAssignedDoctor(uid));
+      }
+
+      match /citas/{docId} {
+        allow read: if isAuthenticated() &&
+          (request.auth.uid == uid || isAssignedDoctor(uid));
+        allow write: if isAuthenticated() && request.auth.uid == uid;
+      }
+
+      match /progresos/{docId} {
+        allow read: if isAuthenticated() &&
+          (request.auth.uid == uid || isAssignedDoctor(uid));
+        allow write: if isAuthenticated() && request.auth.uid == uid;
+      }
+
+      match /notificaciones/{docId} {
+        allow read: if isAuthenticated() && request.auth.uid == uid;
+        allow write: if isAuthenticated() &&
+          (request.auth.uid == uid || isPatientUpdatingOwnDoctorNotification(uid));
+      }
+
       match /{subcollection}/{docId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, write: if isAuthenticated() && request.auth.uid == uid;
       }
     }
   }

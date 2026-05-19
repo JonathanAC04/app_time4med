@@ -51,7 +51,7 @@ class FirestoreService {
   }
 
   // Stream en tiempo real de los medicamentos del paciente
-  Stream<QuerySnapshot> getMedicamentosStream(String uid) {
+  Stream<QuerySnapshot<Map<String, dynamic>>> getMedicamentosStream(String uid) {
     return _db
         .collection('users')
         .doc(uid)
@@ -106,7 +106,7 @@ class FirestoreService {
   }
 
   // Stream en tiempo real de las citas del paciente (ordenadas por fechaHora)
-  Stream<QuerySnapshot> getCitasStream(String uid) {
+  Stream<QuerySnapshot<Map<String, dynamic>>> getCitasStream(String uid) {
     return _db
         .collection('users')
         .doc(uid)
@@ -115,7 +115,7 @@ class FirestoreService {
         .snapshots();
   }
 
-  Future<QuerySnapshot> getMedicamentosOnce(String uid) {
+  Future<QuerySnapshot<Map<String, dynamic>>> getMedicamentosOnce(String uid) {
     return _db
         .collection('users')
         .doc(uid)
@@ -124,7 +124,7 @@ class FirestoreService {
         .get();
   }
 
-  Future<QuerySnapshot> getCitasOnce(String uid) {
+  Future<QuerySnapshot<Map<String, dynamic>>> getCitasOnce(String uid) {
     return _db
         .collection('users')
         .doc(uid)
@@ -138,7 +138,50 @@ class FirestoreService {
   }
 
   Future<void> updateUserData(String uid, Map<String, dynamic> data) async {
+    final currentDoc = await _db.collection('users').doc(uid).get();
+    final currentData = currentDoc.data() ?? <String, dynamic>{};
     await _db.collection('users').doc(uid).set(data, SetOptions(merge: true));
+
+    final role = (currentData['rol'] as String?) ?? '';
+    final doctorId = (currentData['doctorId'] as String?)?.trim();
+    if (role != 'paciente' || doctorId == null || doctorId.isEmpty) return;
+
+    const camposRelevantes = <String>{
+      'nombre',
+      'apellidos',
+      'sexo',
+      'tipoSangre',
+      'peso',
+      'estatura',
+      'fechaNacimiento',
+      'contactoEmergenciaNombre',
+      'contactoEmergenciaTelefono',
+      'imc',
+    };
+
+    bool cambioRelevante = false;
+    for (final entry in data.entries) {
+      if (!camposRelevantes.contains(entry.key)) continue;
+      final previous = currentData[entry.key]?.toString() ?? '';
+      final next = entry.value?.toString() ?? '';
+      if (previous != next) {
+        cambioRelevante = true;
+        break;
+      }
+    }
+
+    if (!cambioRelevante) return;
+    final patientName = (currentData['nombre'] as String?)?.trim();
+    await addDoctorNotification(
+      doctorId: doctorId,
+      patientId: uid,
+      patientName: patientName == null || patientName.isEmpty
+          ? 'Paciente'
+          : patientName,
+      title: 'Actualización de datos del paciente',
+      body: 'Actualizó su información personal y de salud.',
+      type: 'PATIENT_PROFILE_UPDATED',
+    );
   }
 
   // Obtiene el conteo de usuarios por rol
@@ -151,5 +194,110 @@ class FirestoreService {
       print("Error contando usuarios: $e");
       return 0;
     }
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> streamDoctorPatients(
+      String doctorId) {
+    return _db
+        .collection('users')
+        .where('rol', isEqualTo: 'paciente')
+        .where('doctorId', isEqualTo: doctorId)
+        .snapshots();
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> getUserNotificationsStream(
+      String uid) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('notificaciones')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  Future<void> addNotificationToUser({
+    required String uid,
+    required String title,
+    required String body,
+    required String type,
+    Map<String, dynamic>? extraData,
+  }) async {
+    await _db.collection('users').doc(uid).collection('notificaciones').add({
+      'title': title,
+      'body': body,
+      'type': type,
+      'read': false,
+      'createdAt': FieldValue.serverTimestamp(),
+      ...?extraData,
+    });
+  }
+
+  Future<void> markUserNotificationAsRead({
+    required String uid,
+    required String notificationId,
+  }) async {
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('notificaciones')
+        .doc(notificationId)
+        .update({'read': true});
+  }
+
+  Future<void> addDoctorNotification({
+    required String doctorId,
+    required String patientId,
+    required String patientName,
+    required String title,
+    required String body,
+    required String type,
+    Map<String, dynamic>? extraData,
+  }) async {
+    await addNotificationToUser(
+      uid: doctorId,
+      title: title,
+      body: '$patientName: $body',
+      type: type,
+      extraData: {
+        'patientId': patientId,
+        'patientName': patientName,
+        ...?extraData,
+      },
+    );
+  }
+
+  Future<void> notifyDoctorMedicationStatus({
+    required String patientId,
+    required String medicationName,
+    required String status,
+  }) async {
+    final patientDoc = await _db.collection('users').doc(patientId).get();
+    final patientData = patientDoc.data() ?? <String, dynamic>{};
+    final doctorId = (patientData['doctorId'] as String?)?.trim();
+    if (doctorId == null || doctorId.isEmpty) return;
+
+    final patientName =
+        ((patientData['nombre'] as String?)?.trim().isNotEmpty ?? false)
+            ? (patientData['nombre'] as String).trim()
+            : 'Paciente';
+    String actionLabel = status;
+    if (status == 'NO_TOMADO') {
+      actionLabel = 'NO LA TOMÉ';
+    } else if (status == 'POSPUESTO') {
+      actionLabel = 'POSPONER';
+    }
+
+    await addDoctorNotification(
+      doctorId: doctorId,
+      patientId: patientId,
+      patientName: patientName,
+      title: 'Alerta de adherencia de medicamento',
+      body: '$actionLabel en "$medicationName".',
+      type: 'MEDICATION_STATUS_ALERT',
+      extraData: {
+        'medicationName': medicationName,
+        'medicationStatus': status,
+      },
+    );
   }
 }
