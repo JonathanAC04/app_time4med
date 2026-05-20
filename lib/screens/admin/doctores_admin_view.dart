@@ -1,51 +1,31 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../../services/auth_service.dart';
+import '../../services/firestore_service.dart';
 import 'detalle_doctor_view.dart';
-
-// Modelo simple de Doctor para la UI
-class DoctorModel {
-  final String id;
-  final String nombre;
-  final String especialidad;
-  final String email;
-  final String estado; // 'activo', 'inactivo'
-  final String iniciales;
-  final Color avatarColor;
-
-  const DoctorModel({
-    required this.id,
-    required this.nombre,
-    required this.especialidad,
-    required this.email,
-    required this.estado,
-    required this.iniciales,
-    required this.avatarColor,
-  });
-}
-
-// Datos de muestra
-final List<DoctorModel> _doctoresMuestra = [
-  const DoctorModel(id: '1', nombre: 'Dra. Ana Martínez', especialidad: 'Cardiología', email: 'ana.martinez@hospital.com', estado: 'activo', iniciales: 'AM', avatarColor: Color(0xFF6B5DE8)),
-  const DoctorModel(id: '2', nombre: 'Dr. Carlos Rodríguez', especialidad: 'Neurología', email: 'carlos.rodriguez@hospital.com', estado: 'activo', iniciales: 'CR', avatarColor: Colors.teal),
-  const DoctorModel(id: '3', nombre: 'Dra. Sofía Herrera', especialidad: 'Pediatría', email: 'sofia.herrera@hospital.com', estado: 'inactivo', iniciales: 'SH', avatarColor: Colors.orange),
-  const DoctorModel(id: '4', nombre: 'Dr. Luis Pérez', especialidad: 'Medicina General', email: 'luis.perez@hospital.com', estado: 'activo', iniciales: 'LP', avatarColor: Colors.indigo),
-  const DoctorModel(id: '5', nombre: 'Dra. María López', especialidad: 'Endocrinología', email: 'maria.lopez@hospital.com', estado: 'activo', iniciales: 'ML', avatarColor: Colors.pink),
-];
 
 class DoctoresAdminView extends StatefulWidget {
   const DoctoresAdminView({Key? key}) : super(key: key);
 
   @override
-  _DoctoresAdminViewState createState() => _DoctoresAdminViewState();
+  State<DoctoresAdminView> createState() => _DoctoresAdminViewState();
 }
 
 class _DoctoresAdminViewState extends State<DoctoresAdminView> {
+  final FirestoreService _firestoreService = FirestoreService();
+  final AuthService _authService = AuthService();
   final TextEditingController _searchController = TextEditingController();
-  List<DoctorModel> _doctoresFiltrados = _doctoresMuestra;
+
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(_filtrarDoctores);
+    _searchController.addListener(() {
+      setState(() => _query = _searchController.text.trim().toLowerCase());
+    });
   }
 
   @override
@@ -54,19 +34,144 @@ class _DoctoresAdminViewState extends State<DoctoresAdminView> {
     super.dispose();
   }
 
-  void _filtrarDoctores() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      _doctoresFiltrados = _doctoresMuestra
-          .where((d) =>
-              d.nombre.toLowerCase().contains(query) ||
-              d.especialidad.toLowerCase().contains(query))
-          .toList();
-    });
-  }
+  Future<void> _showCreateDoctorDialog() async {
+    final formKey = GlobalKey<FormState>();
+    final nombreCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final passwordCtrl = TextEditingController();
+    final especialidadCtrl = TextEditingController();
+    final telefonoCtrl = TextEditingController();
+    bool loading = false;
 
-  int get _totalActivos => _doctoresMuestra.where((d) => d.estado == 'activo').length;
-  int get _totalInactivos => _doctoresMuestra.where((d) => d.estado == 'inactivo').length;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: !loading,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Dar de alta doctor'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nombreCtrl,
+                    decoration: const InputDecoration(labelText: 'Nombre completo'),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Campo obligatorio' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(labelText: 'Correo'),
+                    validator: (v) {
+                      final value = v?.trim() ?? '';
+                      if (value.isEmpty) return 'Campo obligatorio';
+                      return value.contains('@') ? null : 'Correo inválido';
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: passwordCtrl,
+                    decoration: const InputDecoration(labelText: 'Contraseña temporal'),
+                    validator: (v) {
+                      final value = v?.trim() ?? '';
+                      if (value.isEmpty) return 'Campo obligatorio';
+                      return value.length < 6 ? 'Mínimo 6 caracteres' : null;
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: especialidadCtrl,
+                    decoration: const InputDecoration(labelText: 'Especialidad'),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Campo obligatorio' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: telefonoCtrl,
+                    decoration: const InputDecoration(labelText: 'Teléfono (opcional)'),
+                    keyboardType: TextInputType.phone,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: loading ? null : () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6B5DE8)),
+              onPressed: loading
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() => loading = true);
+                      try {
+                        final uid = await _authService.createUserFromAdmin(
+                          email: emailCtrl.text.trim(),
+                          password: passwordCtrl.text.trim(),
+                        );
+                        await _firestoreService.setUserProfile(uid, {
+                          'nombre': nombreCtrl.text.trim(),
+                          'email': emailCtrl.text.trim(),
+                          'telefono': telefonoCtrl.text.trim(),
+                          'especialidad': especialidadCtrl.text.trim(),
+                          'rol': 'doctor',
+                          'role': 'doctor',
+                          'createdBy': FirebaseAuth.instance.currentUser?.uid,
+                          'fechaRegistro': FieldValue.serverTimestamp(),
+                          'updatedAt': FieldValue.serverTimestamp(),
+                        });
+                        if (!mounted) return;
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Doctor creado correctamente.'),
+                            backgroundColor: Color(0xFF6B5DE8),
+                          ),
+                        );
+                      } on FirebaseAuthException catch (e) {
+                        String message = 'No se pudo crear el doctor.';
+                        if (e.code == 'email-already-in-use') {
+                          message = 'El correo ya está en uso.';
+                        } else if (e.code == 'weak-password') {
+                          message = 'La contraseña es demasiado débil.';
+                        } else if (e.message != null && e.message!.isNotEmpty) {
+                          message = e.message!;
+                        }
+                        setDialogState(() => loading = false);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(message), backgroundColor: Colors.red),
+                        );
+                      } catch (_) {
+                        setDialogState(() => loading = false);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Error inesperado al crear doctor.'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+              child: loading
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Crear', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,92 +185,148 @@ class _DoctoresAdminViewState extends State<DoctoresAdminView> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "Gestión de Doctores",
+          'Gestión de Doctores',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
       ),
-      body: Column(
-        children: [
-          // Encabezado con gradiente y estadísticas
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF6B5DE8), Color(0xFF9B8BFF)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(28),
-                bottomRight: Radius.circular(28),
-              ),
-            ),
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-            child: Column(
-              children: [
-                // Estadísticas
-                Row(
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: _firestoreService.streamUsersByRole('doctor'),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: Color(0xFF6B5DE8)));
+          }
+
+          final docs = (snapshot.data?.docs ?? [])
+              .where((doc) {
+                final data = doc.data();
+                final nombre = ((data['nombre'] as String?) ?? '').toLowerCase();
+                final especialidad = ((data['especialidad'] as String?) ?? '').toLowerCase();
+                return _query.isEmpty || nombre.contains(_query) || especialidad.contains(_query);
+              })
+              .toList()
+            ..sort((a, b) {
+              final aName = ((a.data()['nombre'] as String?) ?? '').toLowerCase();
+              final bName = ((b.data()['nombre'] as String?) ?? '').toLowerCase();
+              return aName.compareTo(bName);
+            });
+
+          return Column(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF6B5DE8), Color(0xFF9B8BFF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
+                ),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                child: Column(
                   children: [
-                    _buildStatBadge("Total", _doctoresMuestra.length.toString(), Icons.medical_services_outlined, Colors.white),
-                    const SizedBox(width: 10),
-                    _buildStatBadge("Activos", _totalActivos.toString(), Icons.check_circle_outline, Colors.greenAccent),
-                    const SizedBox(width: 10),
-                    _buildStatBadge("Inactivos", _totalInactivos.toString(), Icons.pause_circle_outline, Colors.orangeAccent),
+                    Row(
+                      children: [
+                        _buildStatBadge('Total', docs.length.toString(), Icons.medical_services_outlined, Colors.white),
+                        const SizedBox(width: 10),
+                        _buildStatBadge('Con especialidad', docs.where((d) => ((d.data()['especialidad'] as String?) ?? '').trim().isNotEmpty).length.toString(), Icons.badge_outlined, Colors.greenAccent),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _searchController,
+                      style: const TextStyle(color: Colors.black87),
+                      decoration: InputDecoration(
+                        hintText: 'Buscar doctor o especialidad...',
+                        hintStyle: TextStyle(color: Colors.grey.shade500),
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF6B5DE8)),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                // Barra de búsqueda
-                TextField(
-                  controller: _searchController,
-                  style: const TextStyle(color: Colors.black87),
-                  decoration: InputDecoration(
-                    hintText: "Buscar doctor o especialidad...",
-                    hintStyle: TextStyle(color: Colors.grey.shade500),
-                    prefixIcon: const Icon(Icons.search, color: Color(0xFF6B5DE8)),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Lista de doctores
-          Expanded(
-            child: _doctoresFiltrados.isEmpty
-                ? const Center(
-                    child: Text(
-                      "No se encontraron doctores",
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _doctoresFiltrados.length,
-                    itemBuilder: (context, index) {
-                      return _buildDoctorCard(_doctoresFiltrados[index]);
-                    },
-                  ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Función: Nuevo Doctor (próximamente)"),
-              backgroundColor: Color(0xFF6B5DE8),
-            ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: docs.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No hay doctores registrados',
+                          style: TextStyle(color: Colors.grey, fontSize: 16),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: docs.length,
+                        itemBuilder: (context, index) {
+                          final doc = docs[index];
+                          final data = doc.data();
+                          final nombre = (data['nombre'] as String?) ?? 'Doctor';
+                          final especialidad = (data['especialidad'] as String?) ?? 'Sin especialidad';
+                          final email = (data['email'] as String?) ?? '';
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(color: Colors.grey.shade200, blurRadius: 8, offset: const Offset(0, 2)),
+                              ],
+                            ),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              leading: CircleAvatar(
+                                backgroundColor: const Color(0xFF6B5DE8),
+                                child: Text(
+                                  _initials(nombre),
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              title: Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 2),
+                                  Text(especialidad, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                                  if (email.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(email, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                  ],
+                                ],
+                              ),
+                              trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => DetalleDoctorView(doctorId: doc.id),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
           );
         },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showCreateDoctorDialog,
         backgroundColor: const Color(0xFF6B5DE8),
         icon: const Icon(Icons.person_add_outlined, color: Colors.white),
-        label: const Text("Nuevo Doctor", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text(
+          'Dar de alta doctor',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }
@@ -190,55 +351,14 @@ class _DoctoresAdminViewState extends State<DoctoresAdminView> {
     );
   }
 
-  Widget _buildDoctorCard(DoctorModel doctor) {
-    final bool activo = doctor.estado == 'activo';
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.grey.shade200, blurRadius: 8, offset: const Offset(0, 2))],
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CircleAvatar(
-          backgroundColor: doctor.avatarColor,
-          radius: 26,
-          child: Text(
-            doctor.iniciales,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-        ),
-        title: Text(doctor.nombre, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 2),
-            Text(doctor.especialidad, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: activo ? Colors.green.shade50 : Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                activo ? "● Activo" : "● Inactivo",
-                style: TextStyle(
-                  color: activo ? Colors.green.shade700 : Colors.orange.shade700,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => DetalleDoctorView(doctor: doctor)),
-        ),
-      ),
-    );
+  String _initials(String name) {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return 'DR';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'.toUpperCase();
   }
 }
