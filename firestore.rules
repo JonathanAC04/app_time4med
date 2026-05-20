@@ -13,6 +13,10 @@ service cloud.firestore {
       return isAuthenticated() && userDoc(uid).data.rol == 'doctor';
     }
 
+    function isAdmin(uid) {
+      return isAuthenticated() && userDoc(uid).data.rol == 'admin';
+    }
+
     function isAssignedDoctor(patientUid) {
       return isDoctor(request.auth.uid) &&
         userDoc(patientUid).data.doctorId == request.auth.uid;
@@ -29,36 +33,43 @@ service cloud.firestore {
       // Owner can read/write their document.
       // Doctor can read assigned patient profile.
       allow read: if isAuthenticated() &&
-        (request.auth.uid == uid || isAssignedDoctor(uid));
-      allow write: if isAuthenticated() && request.auth.uid == uid;
+        (request.auth.uid == uid || isAssignedDoctor(uid) || isAdmin(request.auth.uid));
+      allow write: if isAuthenticated() &&
+        (request.auth.uid == uid || isAdmin(request.auth.uid));
 
       match /medicamentos/{docId} {
         allow read: if isAuthenticated() &&
-          (request.auth.uid == uid || isAssignedDoctor(uid));
+          (request.auth.uid == uid || isAssignedDoctor(uid) || isAdmin(request.auth.uid));
         allow write: if isAuthenticated() &&
-          (request.auth.uid == uid || isAssignedDoctor(uid));
+          (request.auth.uid == uid || isAssignedDoctor(uid) || isAdmin(request.auth.uid));
       }
 
       match /citas/{docId} {
         allow read: if isAuthenticated() &&
-          (request.auth.uid == uid || isAssignedDoctor(uid));
-        allow write: if isAuthenticated() && request.auth.uid == uid;
+          (request.auth.uid == uid || isAssignedDoctor(uid) || isAdmin(request.auth.uid));
+        allow write: if isAuthenticated() &&
+          (request.auth.uid == uid || isAdmin(request.auth.uid));
       }
 
       match /progresos/{docId} {
         allow read: if isAuthenticated() &&
-          (request.auth.uid == uid || isAssignedDoctor(uid));
-        allow write: if isAuthenticated() && request.auth.uid == uid;
+          (request.auth.uid == uid || isAssignedDoctor(uid) || isAdmin(request.auth.uid));
+        allow write: if isAuthenticated() &&
+          (request.auth.uid == uid || isAdmin(request.auth.uid));
       }
 
       match /notificaciones/{docId} {
-        allow read: if isAuthenticated() && request.auth.uid == uid;
+        allow read: if isAuthenticated() &&
+          (request.auth.uid == uid || isAdmin(request.auth.uid));
         allow write: if isAuthenticated() &&
-          (request.auth.uid == uid || isPatientUpdatingOwnDoctorNotification(uid));
+          (request.auth.uid == uid ||
+            isPatientUpdatingOwnDoctorNotification(uid) ||
+            isAdmin(request.auth.uid));
       }
 
       match /{subcollection}/{docId} {
-        allow read, write: if isAuthenticated() && request.auth.uid == uid;
+        allow read, write: if isAuthenticated() &&
+          (request.auth.uid == uid || isAdmin(request.auth.uid));
       }
     }
   }

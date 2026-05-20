@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -36,6 +37,35 @@ class AuthService {
     } catch (e) {
       print("Error en Registro: $e");
       return null;
+    }
+  }
+
+  Future<String> createUserFromAdmin({
+    required String email,
+    required String password,
+  }) async {
+    final appName = 'admin-create-${DateTime.now().microsecondsSinceEpoch}';
+    final secondaryApp = await Firebase.initializeApp(
+      name: appName,
+      options: Firebase.app().options,
+    );
+    try {
+      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+      final credential = await secondaryAuth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final user = credential.user;
+      if (user == null) {
+        throw FirebaseAuthException(
+          code: 'user-not-created',
+          message: 'No se pudo crear el usuario.',
+        );
+      }
+      await secondaryAuth.signOut();
+      return user.uid;
+    } finally {
+      await secondaryApp.delete();
     }
   }
 }

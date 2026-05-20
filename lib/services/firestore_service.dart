@@ -10,7 +10,10 @@ class FirestoreService {
     try {
       DocumentSnapshot doc = await _db.collection('users').doc(uid).get();
       if (doc.exists) {
-        return doc['rol']; // Devuelve 'admin', 'doctor' o 'paciente'
+        final data = doc.data() as Map<String, dynamic>? ?? <String, dynamic>{};
+        final rol = ((data['rol'] ?? data['role']) as String? ?? '').trim().toLowerCase();
+        if (rol == 'patient') return 'paciente';
+        if (rol == 'doctor' || rol == 'admin' || rol == 'paciente') return rol;
       }
       return null;
     } catch (e) {
@@ -203,6 +206,34 @@ class FirestoreService {
         .where('rol', isEqualTo: 'paciente')
         .where('doctorId', isEqualTo: doctorId)
         .snapshots();
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> streamUsersByRole(String role) {
+    return _db.collection('users').where('rol', isEqualTo: role).snapshots();
+  }
+
+  Future<void> setUserProfile(
+    String uid,
+    Map<String, dynamic> data, {
+    bool merge = true,
+  }) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .set(data, SetOptions(merge: merge));
+  }
+
+  Future<void> assignPatientToDoctor({
+    required String patientId,
+    String? doctorId,
+    String? doctorName,
+  }) async {
+    final payload = <String, dynamic>{
+      'doctorId': doctorId == null || doctorId.isEmpty ? FieldValue.delete() : doctorId,
+      'medico': doctorName == null || doctorName.isEmpty ? FieldValue.delete() : doctorName,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    await _db.collection('users').doc(patientId).set(payload, SetOptions(merge: true));
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> getUserNotificationsStream(
