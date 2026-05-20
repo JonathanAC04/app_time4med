@@ -334,7 +334,7 @@ class _DoctorNotificationsTab extends StatelessWidget {
   }
 }
 
-class _DoctorProfileTab extends StatelessWidget {
+class _DoctorProfileTab extends StatefulWidget {
   final String doctorId;
   final VoidCallback onLogout;
 
@@ -344,14 +344,123 @@ class _DoctorProfileTab extends StatelessWidget {
   });
 
   @override
+  State<_DoctorProfileTab> createState() => _DoctorProfileTabState();
+}
+
+class _DoctorProfileTabState extends State<_DoctorProfileTab> {
+  final FirestoreService _service = FirestoreService();
+
+  Future<void> _showEditProfileDialog(Map<String, dynamic> currentData) async {
+    final formKey = GlobalKey<FormState>();
+    final nombreCtrl = TextEditingController(text: (currentData['nombre'] as String?) ?? '');
+    final especialidadCtrl = TextEditingController(text: (currentData['especialidad'] as String?) ?? '');
+    final telefonoCtrl = TextEditingController(text: (currentData['telefono'] as String?) ?? '');
+    final fotoCtrl = TextEditingController(text: (currentData['fotoUrl'] as String?) ?? '');
+    bool saving = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Editar perfil'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nombreCtrl,
+                    decoration: const InputDecoration(labelText: 'Nombre completo'),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Campo obligatorio' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: especialidadCtrl,
+                    decoration: const InputDecoration(labelText: 'Especialidad'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: telefonoCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(labelText: 'Teléfono'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: fotoCtrl,
+                    decoration: const InputDecoration(labelText: 'URL de foto (opcional)'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6B5DE8)),
+              onPressed: saving
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() => saving = true);
+                      try {
+                        await _service.updateUserData(
+                          widget.doctorId,
+                          {
+                            'nombre': nombreCtrl.text.trim(),
+                            'especialidad': especialidadCtrl.text.trim(),
+                            'telefono': telefonoCtrl.text.trim(),
+                            'fotoUrl': fotoCtrl.text.trim(),
+                            'updatedAt': FieldValue.serverTimestamp(),
+                          },
+                        );
+                        if (!mounted) return;
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Perfil actualizado correctamente.'),
+                            backgroundColor: Color(0xFF6B5DE8),
+                          ),
+                        );
+                      } catch (e) {
+                        setDialogState(() => saving = false);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('No se pudo actualizar el perfil: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+              child: saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Guardar', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final service = FirestoreService();
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: service.getUserStream(doctorId),
+      stream: _service.getUserStream(widget.doctorId),
       builder: (context, snapshot) {
         final data = snapshot.data?.data() ?? <String, dynamic>{};
         final nombre = (data['nombre'] as String?) ?? 'Doctor';
         final email = (data['email'] as String?) ?? '';
+        final especialidad = (data['especialidad'] as String?) ?? '';
+        final telefono = (data['telefono'] as String?) ?? '';
+        final fotoUrl = (data['fotoUrl'] as String?) ?? '';
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -363,10 +472,13 @@ class _DoctorProfileTab extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  const CircleAvatar(
+                  CircleAvatar(
                     radius: 36,
-                    backgroundColor: Color(0xFFE8E5FF),
-                    child: Icon(Icons.person, color: Color(0xFF6B5DE8), size: 36),
+                    backgroundColor: const Color(0xFFE8E5FF),
+                    backgroundImage: fotoUrl.trim().isNotEmpty ? NetworkImage(fotoUrl.trim()) : null,
+                    child: fotoUrl.trim().isNotEmpty
+                        ? null
+                        : const Icon(Icons.person, color: Color(0xFF6B5DE8), size: 36),
                   ),
                   const SizedBox(height: 12),
                   Text(nombre,
@@ -374,12 +486,27 @@ class _DoctorProfileTab extends StatelessWidget {
                           fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   Text(email, style: const TextStyle(color: Colors.grey)),
+                  if (especialidad.trim().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text('Especialidad: $especialidad', style: const TextStyle(color: Colors.grey)),
+                  ],
+                  if (telefono.trim().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text('Teléfono: $telefono', style: const TextStyle(color: Colors.grey)),
+                  ],
                 ],
               ),
             ),
             const SizedBox(height: 14),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6B5DE8)),
+              onPressed: () => _showEditProfileDialog(data),
+              icon: const Icon(Icons.edit_outlined, color: Colors.white),
+              label: const Text('Editar perfil', style: TextStyle(color: Colors.white)),
+            ),
+            const SizedBox(height: 10),
             OutlinedButton.icon(
-              onPressed: onLogout,
+              onPressed: widget.onLogout,
               icon: const Icon(Icons.logout, color: Colors.redAccent),
               label: const Text('Cerrar sesión',
                   style: TextStyle(color: Colors.redAccent)),
