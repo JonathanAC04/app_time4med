@@ -282,6 +282,149 @@ class _PacienteDoctorDetailState extends State<PacienteDoctorDetail> {
     }
   }
 
+  Future<void> _showAppointmentForm() async {
+    final motivoController = TextEditingController();
+    DateTime? fecha;
+    TimeOfDay? hora;
+    bool loading = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Agendar cita',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: motivoController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Motivo',
+                  prefixIcon: Icon(Icons.notes_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: () async {
+                  final pickedDate = await showDatePicker(
+                    context: context,
+                    initialDate: fecha ?? DateTime.now(),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 730)),
+                  );
+                  if (pickedDate == null || !context.mounted) return;
+                  final pickedTime = await showTimePicker(
+                    context: context,
+                    initialTime: hora ?? TimeOfDay.now(),
+                  );
+                  if (pickedTime == null) return;
+                  setModalState(() {
+                    fecha = pickedDate;
+                    hora = pickedTime;
+                  });
+                },
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Fecha y hora',
+                    prefixIcon: Icon(Icons.calendar_month_outlined),
+                  ),
+                  child: Text(
+                    fecha == null || hora == null
+                        ? 'Seleccionar fecha y hora'
+                        : '${fecha!.day.toString().padLeft(2, '0')}/${fecha!.month.toString().padLeft(2, '0')}/${fecha!.year} ${hora!.hour.toString().padLeft(2, '0')}:${hora!.minute.toString().padLeft(2, '0')}',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6B5DE8),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: loading
+                      ? null
+                      : () async {
+                          final motivo = motivoController.text.trim();
+                          if (motivo.isEmpty || fecha == null || hora == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Completa motivo, fecha y hora de la cita.'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                            return;
+                          }
+                          setModalState(() => loading = true);
+                          try {
+                            await _firestoreService.addCita(
+                              widget.patientId,
+                              fecha!,
+                              hora!,
+                              motivo,
+                            );
+                            await _firestoreService.addNotificationToUser(
+                              uid: widget.patientId,
+                              title: 'Nueva cita agendada',
+                              body: 'Tu médico registró una cita: $motivo.',
+                              type: 'DOCTOR_APPOINTMENT_ASSIGNED',
+                            );
+                            if (!ctx.mounted) return;
+                            Navigator.pop(ctx);
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('✅ Cita agendada correctamente.'),
+                                backgroundColor: Color(0xFF6B5DE8),
+                              ),
+                            );
+                          } catch (e) {
+                            setModalState(() => loading = false);
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('No se pudo agendar la cita: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        },
+                  child: loading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text(
+                          'Guardar cita',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   DateTime? _extractFechaHora(Map<String, dynamic> data) {
     final ts = data['fechaHora'];
     if (ts is Timestamp) return ts.toDate();
@@ -324,6 +467,11 @@ class _PacienteDoctorDetailState extends State<PacienteDoctorDetail> {
             foregroundColor: Colors.black,
             elevation: 0,
             actions: [
+              IconButton(
+                tooltip: 'Agendar cita',
+                icon: const Icon(Icons.event_available_outlined),
+                onPressed: _showAppointmentForm,
+              ),
               IconButton(
                 tooltip: 'Asignar receta',
                 icon: const Icon(Icons.add_circle_outline),
@@ -488,6 +636,18 @@ class _PacienteDoctorDetailState extends State<PacienteDoctorDetail> {
                 ),
                 const SizedBox(height: 16),
                 _sectionTitle('Próximas citas'),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _showAppointmentForm,
+                    icon: const Icon(Icons.event_available_outlined, color: Color(0xFF6B5DE8)),
+                    label: const Text(
+                      'Agendar cita para este paciente',
+                      style: TextStyle(color: Color(0xFF6B5DE8)),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 8),
                 StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: _firestoreService.getCitasStream(widget.patientId),

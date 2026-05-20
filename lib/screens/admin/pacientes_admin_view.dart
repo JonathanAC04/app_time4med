@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
@@ -32,6 +33,38 @@ class _PacientesAdminViewState extends State<PacientesAdminView> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  String _messageFromException(Object error) {
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'email-already-in-use':
+          return 'El correo ya está en uso. Usa un correo diferente.';
+        case 'weak-password':
+          return 'La contraseña es demasiado débil. Usa al menos 6 caracteres.';
+        case 'invalid-email':
+          return 'El correo ingresado no es válido.';
+        case 'network-request-failed':
+          return 'Sin conexión. Revisa tu internet e inténtalo nuevamente.';
+        default:
+          return error.message?.trim().isNotEmpty == true
+              ? error.message!.trim()
+              : 'No se pudo crear el paciente (Auth: ${error.code}).';
+      }
+    }
+    if (error is FirebaseException) {
+      switch (error.code) {
+        case 'permission-denied':
+          return 'No tienes permisos para guardar el perfil del paciente en Firestore.';
+        case 'network-request-failed':
+          return 'Sin conexión. Revisa tu internet e inténtalo nuevamente.';
+        default:
+          return error.message?.trim().isNotEmpty == true
+              ? error.message!.trim()
+              : 'No se pudo guardar el perfil del paciente (Firestore: ${error.code}).';
+      }
+    }
+    return 'Error inesperado al crear paciente: $error';
   }
 
   Future<void> _showCreatePatientDialog() async {
@@ -142,11 +175,10 @@ class _PacientesAdminViewState extends State<PacientesAdminView> {
                       if (!formKey.currentState!.validate()) return;
                       setDialogState(() => loading = true);
                       try {
-                        final uid = await _authService.createUserFromAdmin(
+                        await _authService.createUserFromAdmin(
                           email: emailCtrl.text.trim(),
                           password: passwordCtrl.text.trim(),
-                        );
-                        await _firestoreService.setUserProfile(uid, {
+                          profileData: {
                           'nombre': nombreCtrl.text.trim(),
                           'email': emailCtrl.text.trim(),
                           'sexo': sexo,
@@ -159,7 +191,8 @@ class _PacientesAdminViewState extends State<PacientesAdminView> {
                           'createdBy': FirebaseAuth.instance.currentUser?.uid,
                           'fechaRegistro': FieldValue.serverTimestamp(),
                           'updatedAt': FieldValue.serverTimestamp(),
-                        });
+                          },
+                        );
                         if (!mounted) return;
                         Navigator.pop(ctx);
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -169,27 +202,31 @@ class _PacientesAdminViewState extends State<PacientesAdminView> {
                           ),
                         );
                       } on FirebaseAuthException catch (e) {
-                        String message = 'No se pudo crear el paciente.';
-                        if (e.code == 'email-already-in-use') {
-                          message = 'El correo ya está en uso.';
-                        } else if (e.code == 'weak-password') {
-                          message = 'La contraseña es demasiado débil.';
-                        } else if (e.message != null && e.message!.isNotEmpty) {
-                          message = e.message!;
+                        if (kDebugMode) {
+                          debugPrint('Crear paciente FirebaseAuthException: ${e.code} ${e.message}');
                         }
                         setDialogState(() => loading = false);
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(message), backgroundColor: Colors.red),
+                          SnackBar(content: Text(_messageFromException(e)), backgroundColor: Colors.red),
                         );
-                      } catch (_) {
+                      } on FirebaseException catch (e) {
+                        if (kDebugMode) {
+                          debugPrint('Crear paciente FirebaseException: ${e.code} ${e.message}');
+                        }
                         setDialogState(() => loading = false);
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Error inesperado al crear paciente.'),
-                            backgroundColor: Colors.red,
-                          ),
+                          SnackBar(content: Text(_messageFromException(e)), backgroundColor: Colors.red),
+                        );
+                      } catch (e) {
+                        if (kDebugMode) {
+                          debugPrint('Crear paciente error inesperado: $e');
+                        }
+                        setDialogState(() => loading = false);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(_messageFromException(e)), backgroundColor: Colors.red),
                         );
                       }
                     },

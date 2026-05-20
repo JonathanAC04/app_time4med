@@ -48,7 +48,7 @@ service cloud.firestore {
         allow read: if isAuthenticated() &&
           (request.auth.uid == uid || isAssignedDoctor(uid) || isAdmin(request.auth.uid));
         allow write: if isAuthenticated() &&
-          (request.auth.uid == uid || isAdmin(request.auth.uid));
+          (request.auth.uid == uid || isAssignedDoctor(uid) || isAdmin(request.auth.uid));
       }
 
       match /progresos/{docId} {

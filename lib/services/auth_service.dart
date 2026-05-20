@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -43,27 +44,62 @@ class AuthService {
   Future<String> createUserFromAdmin({
     required String email,
     required String password,
+    Map<String, dynamic>? profileData,
   }) async {
     final appName = 'admin-create-${DateTime.now().microsecondsSinceEpoch}';
     final secondaryApp = await Firebase.initializeApp(
       name: appName,
       options: Firebase.app().options,
     );
+    User? createdUser;
+    final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
     try {
-      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
       final credential = await secondaryAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
-      final user = credential.user;
-      if (user == null) {
+      createdUser = credential.user;
+      if (createdUser == null) {
         throw FirebaseAuthException(
           code: 'user-not-created',
           message: 'No se pudo crear el usuario.',
         );
       }
+      if (profileData != null) {
+        await _db.collection('users').doc(createdUser.uid).set(
+              profileData,
+              SetOptions(merge: true),
+            );
+      }
       await secondaryAuth.signOut();
-      return user.uid;
+      return createdUser.uid;
+    } on FirebaseAuthException catch (e) {
+      if (kDebugMode) {
+        debugPrint('AuthService.createUserFromAdmin auth error: ${e.code} ${e.message}');
+      }
+      rethrow;
+    } on FirebaseException catch (e) {
+      if (kDebugMode) {
+        debugPrint('AuthService.createUserFromAdmin firestore error: ${e.code} ${e.message}');
+      }
+      if (createdUser != null) {
+        try {
+          await createdUser!.delete();
+          if (kDebugMode) {
+            debugPrint('AuthService.createUserFromAdmin rollback: auth user deleted for ${createdUser!.uid}');
+          }
+        } catch (deleteError) {
+          if (kDebugMode) {
+            debugPrint('AuthService.createUserFromAdmin rollback failed: $deleteError');
+          }
+        }
+      }
+      rethrow;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('AuthService.createUserFromAdmin unexpected error: $e');
+      }
+      rethrow;
     } finally {
       await secondaryApp.delete();
     }

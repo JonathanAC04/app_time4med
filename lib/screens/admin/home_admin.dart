@@ -71,6 +71,16 @@ class _HomeAdminState extends State<HomeAdmin> {
   }
 
   Widget _buildBody() {
+    if (_selectedIndex == 1) {
+      return _buildManagementTab();
+    }
+    if (_selectedIndex == 2) {
+      return _buildSettingsTab();
+    }
+    return _buildDashboardTab();
+  }
+
+  Widget _buildDashboardTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
@@ -105,11 +115,19 @@ class _HomeAdminState extends State<HomeAdmin> {
                     ),
                   ],
                 ),
-          const SizedBox(height: 30),
+        ],
+      ),
+    );
+  }
 
-          // Opciones principales
+  Widget _buildManagementTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           const Text(
-            "Administración",
+            "Gestión",
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 15),
@@ -133,15 +151,40 @@ class _HomeAdminState extends State<HomeAdmin> {
               MaterialPageRoute(builder: (_) => const PacientesAdminView()),
             ),
           ),
-          _buildBotonAccion(
-            Icons.bar_chart_outlined,
-            "Ver Reportes Generales",
-            "Estadísticas y métricas del sistema",
-            Colors.indigo,
-            () {},
-          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSettingsTab() {
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(color: Colors.grey.shade200, blurRadius: 8, offset: const Offset(0, 2)),
+            ],
+          ),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Configuración",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              SizedBox(height: 8),
+              Text(
+                "Desde este panel puedes gestionar doctores y pacientes, y cerrar sesión cuando lo necesites.",
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -204,8 +247,8 @@ class _HomeAdminState extends State<HomeAdmin> {
       unselectedItemColor: Colors.grey,
       items: const [
         BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), label: "Panel"),
-        BottomNavigationBarItem(icon: Icon(Icons.manage_accounts_outlined), label: "Usuarios"),
-        BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: "Ajustes"),
+        BottomNavigationBarItem(icon: Icon(Icons.manage_accounts_outlined), label: "Gestión"),
+        BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: "Configuración"),
       ],
     );
   }
