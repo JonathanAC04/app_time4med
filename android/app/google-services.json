@@ -12,7 +12,20 @@
           "package_name": "com.example.app_medica"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "812282423584-kvi9nhn3n2pof1u3us3vhjh68r82gtc1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.app_medica",
+            "certificate_hash": "26f5d7dedb023e09f189f5170cda0fe3f3a9f795"
+          }
+        },
+        {
+          "client_id": "812282423584-gohsflbb9cbisedkgq0ni8qbrbemg905.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDBgddKe_tXW0vK_eybOKzKAZPXUuWSN00"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "812282423584-gohsflbb9cbisedkgq0ni8qbrbemg905.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

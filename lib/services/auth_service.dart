@@ -2,10 +2,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   // 1. Iniciar sesión (Ya lo tenías)
   Future<User?> login(String email, String password) async {
@@ -37,6 +39,42 @@ class AuthService {
       return user;
     } catch (e) {
       print("Error en Registro: $e");
+      return null;
+    }
+  }
+
+  // 3. Iniciar sesión con Google
+  Future<User?> signInWithGoogle() async {
+    try {
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) return null; // El usuario canceló
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      final User? user = userCredential.user;
+
+      if (user != null) {
+        // Verificar si es la primera vez que inicia sesión (no existe en users)
+        final userDoc = await _db.collection('users').doc(user.uid).get();
+        if (!userDoc.exists) {
+          await _db.collection('users').doc(user.uid).set({
+            'nombre': user.displayName ?? '',
+            'email': user.email,
+            'rol': 'paciente', // Por defecto "paciente"
+            'fechaRegistro': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      return user;
+    } catch (e) {
+      print("Error en Google Sign-In: $e");
       return null;
     }
   }

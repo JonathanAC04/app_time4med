@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../services/firestore_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
@@ -13,32 +14,123 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _nombreController = TextEditingController();
   final _apellidoController = TextEditingController();
+
   bool _aceptaTerminos = false;
   bool _isLoading = false;
 
   final AuthService _authService = AuthService();
+  final FirestoreService _firestoreService = FirestoreService();
 
-  void _registrar() async {
+  Future<void> _registrar() async {
     if (!_aceptaTerminos) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Debes aceptar los términos"), backgroundColor: Colors.orange));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Debes aceptar los términos"),
+          backgroundColor: Colors.orange,
+        ),
+      );
       return;
     }
+
     setState(() => _isLoading = true);
 
-    var user = await _authService.register(
-      _emailController.text.trim(),
-      _passwordController.text.trim(),
-      "${_nombreController.text} ${_apellidoController.text}",
-      "paciente", // Registramos como paciente por defecto
-    );
+    try {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
+      final nombreCompleto =
+          "${_nombreController.text.trim()} ${_apellidoController.text.trim()}".trim();
 
-    setState(() => _isLoading = false);
+      final user = await _authService.register(
+        email,
+        password,
+        nombreCompleto,
+        "paciente", // registro libre -> paciente
+      );
 
-    if (user != null) {
+      if (!mounted) return;
+
+      if (user == null) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error al crear cuenta"), backgroundColor: Colors.red),
+        );
+        return;
+      }
+
+      // Si existe invitación y es de PACIENTE, la aplicamos. Si es de DOCTOR, NO.
+      await _firestoreService.applyInviteIfExists(
+        uid: user.uid,
+        email: email,
+        onlyPatientRole: true,
+      );
+
+      if (!mounted) return;
+
+      setState(() => _isLoading = false);
       Navigator.pushReplacementNamed(context, '/paciente');
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al crear cuenta"), backgroundColor: Colors.red));
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: \$e"), backgroundColor: Colors.red),
+        );
+      }
     }
+  }
+
+  Future<void> _registrarConGoogle() async {
+    if (!_aceptaTerminos) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Debes aceptar los términos"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final user = await _authService.signInWithGoogle();
+
+      if (!mounted) return;
+
+      if (user == null) {
+        setState(() => _isLoading = false);
+        return; // El usuario canceló la autenticación con Google
+      }
+
+      final email = user.email;
+      if (email != null && email.trim().isNotEmpty) {
+        // En registro libre siempre va a paciente a menos que haya una invitación de paciente
+        await _firestoreService.applyInviteIfExists(
+          uid: user.uid,
+          email: email,
+          onlyPatientRole: true, // Sólo aplicar si es paciente
+        );
+      }
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      Navigator.pushReplacementNamed(context, '/paciente');
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: \$e"), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _nombreController.dispose();
+    _apellidoController.dispose();
+    super.dispose();
   }
 
   @override
@@ -47,7 +139,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.black), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -71,9 +166,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 15),
             const Text("Crea tu cuenta", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
-            const Text("Únete a miles de usuarios y haz de tomar tus medicamentos una actividad más sencilla.", style: TextStyle(color: Colors.grey, fontSize: 15)),
+            const Text(
+              "Únete a miles de usuarios y haz de tomar tus medicamentos una actividad más sencilla.",
+              style: TextStyle(color: Colors.grey, fontSize: 15),
+            ),
             const SizedBox(height: 25),
-
             Row(
               children: [
                 Expanded(child: _buildTextField("Nombre", "Ej. Juan", Icons.person_outline, _nombreController)),
@@ -82,32 +179,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ],
             ),
             const SizedBox(height: 15),
-            _buildTextField("Correo electrónico", "juan.perez@ejemplo.com", Icons.email_outlined, _emailController, subtext: "Usaremos esto para enviarte confirmaciones."),
+            _buildTextField("Correo electrónico", "juan.perez@ejemplo.com", Icons.email_outlined, _emailController),
             const SizedBox(height: 15),
-            _buildTextField("Contraseña", "••••••••", Icons.lock_outline, _passwordController, isPassword: true, subtext: "Mínimo 6 caracteres."),
+            _buildTextField("Contraseña", "••••••••", Icons.lock_outline, _passwordController, isPassword: true),
             const SizedBox(height: 20),
-
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Checkbox(value: _aceptaTerminos, onChanged: (val) => setState(() => _aceptaTerminos = val!), activeColor: const Color(0xFF6B5DE8)),
+                Checkbox(
+                  value: _aceptaTerminos,
+                  onChanged: (val) => setState(() => _aceptaTerminos = val ?? false),
+                  activeColor: const Color(0xFF6B5DE8),
+                ),
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.only(top: 10.0),
-                    child: Text("Acepto los Términos de Servicio y la Política de Privacidad de Time4med.", style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
+                    child: Text(
+                      "Acepto los Términos de Servicio y la Política de Privacidad de Time4med.",
+                      style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                    ),
                   ),
                 )
               ],
             ),
             const SizedBox(height: 20),
-
             SizedBox(
               width: double.infinity,
               height: 55,
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6B5DE8), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6B5DE8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      ),
                       onPressed: _registrar,
                       child: const Text("Crear cuenta", style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
@@ -118,8 +223,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // Ahora SÍ recibe el controlador para guardar lo que escribes
-  Widget _buildTextField(String label, String hint, IconData icon, TextEditingController controller, {bool isPassword = false, String? subtext}) {
+  Widget _buildTextField(
+    String label,
+    String hint,
+    IconData icon,
+    TextEditingController controller, {
+    bool isPassword = false,
+    String? subtext,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -128,7 +239,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         TextField(
           controller: controller,
           obscureText: isPassword,
-          decoration: InputDecoration(hintText: hint, hintStyle: TextStyle(color: Colors.grey.shade400), prefixIcon: Icon(icon, color: Colors.grey)),
+          decoration: InputDecoration(hintText: hint, prefixIcon: Icon(icon)),
         ),
         if (subtext != null) ...[
           const SizedBox(height: 5),
