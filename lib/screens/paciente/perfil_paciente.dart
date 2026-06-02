@@ -1,10 +1,9 @@
-import 'dart:convert';
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/firestore_service.dart';
+import '../../services/cloudinary_service.dart';   // ← NUEVO
 import 'editar_paciente_view.dart';
 
 class PerfilPaciente extends StatefulWidget {
@@ -31,33 +30,43 @@ class _PerfilPacienteState extends State<PerfilPaciente> {
   }
 
   Future<void> _seleccionarFotoGaleria() async {
-    if (_uid == null) return;
-    final image = await _picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 256,
-      maxHeight: 256,
-      imageQuality: 60,
-    );
-    if (image == null) return;
+  if (_uid == null) return;
+  final image = await _picker.pickImage(
+    source: ImageSource.gallery,
+    maxWidth: 800,
+    maxHeight: 800,
+    imageQuality: 85,
+  );
+  if (image == null) return;
 
-    final bytes = await image.readAsBytes();
-    final base64 = base64Encode(bytes);
-    if (base64.length > 350000) {
-      if (mounted) {
-        _showSnackBar("❌ La imagen es demasiado grande. Elige una más ligera.",
-            color: Colors.red);
-      }
-      return;
+  if (mounted) _showSnackBar("📤 Subiendo foto...");
+
+  final bytes = await image.readAsBytes();
+  final url = await CloudinaryService.uploadImage(
+    bytes,
+    folder: 'perfiles_pacientes',
+    publicId: _uid, // sobreescribe la foto anterior del mismo usuario
+  );
+
+  if (url == null) {
+    if (mounted) {
+      _showSnackBar("❌ Error al subir la foto. Intenta de nuevo.",
+          color: Colors.red);
     }
-    await _firestoreService.updateUserData(_uid!, {'fotoPerfilBase64': base64});
-    if (mounted) _showSnackBar("✅ Foto de perfil actualizada.");
+    return;
   }
 
-  Future<void> _borrarFotoPerfil() async {
-    if (_uid == null) return;
-    await _firestoreService.updateUserData(_uid!, {'fotoPerfilBase64': FieldValue.delete()});
-    if (mounted) _showSnackBar("🗑️ Foto de perfil eliminada.");
-  }
+  await _firestoreService.updateUserData(_uid!, {'fotoPerfilUrl': url});
+  if (mounted) _showSnackBar("✅ Foto de perfil actualizada.");
+}
+
+Future<void> _borrarFotoPerfil() async {
+  if (_uid == null) return;
+  await _firestoreService
+      .updateUserData(_uid!, {'fotoPerfilUrl': FieldValue.delete()});
+  if (mounted) _showSnackBar("🗑️ Foto de perfil eliminada.");
+}
+
 
   void _abrirMenuFoto() {
     showModalBottomSheet(
@@ -117,16 +126,6 @@ class _PerfilPacienteState extends State<PerfilPaciente> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const EditarPacienteView()));
   }
 
-  Uint8List? _decodeBase64(String? value) {
-    if (value == null || value.isEmpty) return null;
-    try {
-      return base64Decode(value);
-    } catch (e) {
-      debugPrint('No se pudo decodificar fotoPerfilBase64: $e');
-      return null;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_uid == null) {
@@ -143,7 +142,7 @@ class _PerfilPacienteState extends State<PerfilPaciente> {
         final peso = data['peso']?.toString() ?? 'N/D';
         final fechaNac = (data['fechaNacimiento'] as String?) ?? 'N/D';
         final esAsignado = data['doctorId'] != null || data['medico'] != null;
-        final fotoBytes = _decodeBase64(data['fotoPerfilBase64'] as String?);
+        final fotoUrl = (data['fotoPerfilUrl'] as String?) ?? '';
 
         return Scaffold(
           backgroundColor: Colors.white,
@@ -167,8 +166,8 @@ class _PerfilPacienteState extends State<PerfilPaciente> {
                       CircleAvatar(
                         radius: 50,
                         backgroundColor: const Color(0xFFE8E5FF),
-                        backgroundImage: fotoBytes != null ? MemoryImage(fotoBytes) : null,
-                        child: fotoBytes == null
+                        backgroundImage: fotoUrl.isNotEmpty ? NetworkImage(fotoUrl) : null,
+                        child: fotoUrl.isEmpty
                             ? const Icon(Icons.person, color: Color(0xFF6B5DE8), size: 50)
                             : null,
                       ),

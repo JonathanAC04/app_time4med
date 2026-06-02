@@ -9,76 +9,111 @@ class AuthService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
-  // 1. Iniciar sesión (Ya lo tenías)
+  // ============================================================
+  // Login con email y contraseña
+  // ============================================================
   Future<User?> login(String email, String password) async {
     try {
-      UserCredential userCredential = await _auth.signInWithEmailAndPassword(email: email, password: password);
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+          email: email, password: password);
       return userCredential.user;
     } catch (e) {
-      print("Error en Login: $e");
+      debugPrint("Error en Login: $e");
       return null;
     }
   }
 
-  // 2. NUEVO: Registrar usuario y guardar su rol en la base de datos
-  Future<User?> register(String email, String password, String nombre, String rol) async {
+  // ============================================================
+  // Registro con email y contraseña
+  // ============================================================
+  Future<User?> register(
+      String email, String password, String nombre, String rol) async {
     try {
-      // A) Crea el usuario en Firebase Authentication
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+      UserCredential userCredential = await _auth
+          .createUserWithEmailAndPassword(email: email, password: password);
       User? user = userCredential.user;
-
       if (user != null) {
-        // B) Guarda su información y su ROL en Firestore Database
         await _db.collection('users').doc(user.uid).set({
           'nombre': nombre,
           'email': email,
           'rol': rol,
-          'fechaRegistro': DateTime.now(),
+          'fechaRegistro': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
         });
       }
       return user;
     } catch (e) {
-      print("Error en Registro: $e");
+      debugPrint("Error en Registro: $e");
       return null;
     }
   }
 
-  // 3. Iniciar sesión con Google
+  // ============================================================
+  // Google Sign-In (API v6)
+  // ============================================================
   Future<User?> signInWithGoogle() async {
     try {
+      // 1. Mostrar selector de cuentas de Google
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return null; // El usuario canceló
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      // Si el usuario cierra el selector sin elegir cuenta
+      if (googleUser == null) {
+        debugPrint('Usuario canceló el login con Google.');
+        return null;
+      }
 
-      final AuthCredential credential = GoogleAuthProvider.credential(
+      // 2. Obtener tokens de autenticación
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      // 3. Construir la credencial para Firebase Auth
+      final OAuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      // 4. Iniciar sesión en Firebase con esa credencial
+      final UserCredential userCredential =
+          await _auth.signInWithCredential(credential);
       final User? user = userCredential.user;
 
+      // 5. Si es la primera vez, crear su doc en /users con rol "paciente"
       if (user != null) {
-        // Verificar si es la primera vez que inicia sesión (no existe en users)
         final userDoc = await _db.collection('users').doc(user.uid).get();
         if (!userDoc.exists) {
           await _db.collection('users').doc(user.uid).set({
             'nombre': user.displayName ?? '',
             'email': user.email,
-            'rol': 'paciente', // Por defecto "paciente"
+            'rol': 'paciente',
             'fechaRegistro': FieldValue.serverTimestamp(),
+            'createdAt': FieldValue.serverTimestamp(),
           });
         }
       }
 
       return user;
     } catch (e) {
-      print("Error en Google Sign-In: $e");
+      debugPrint('Error en Google Sign-In: $e');
       return null;
     }
   }
 
+  // ============================================================
+  // Cerrar sesión (Firebase + Google)
+  // ============================================================
+  Future<void> signOut() async {
+    try {
+      await _googleSignIn.signOut();
+    } catch (e) {
+      debugPrint('Error en signOut de Google: $e');
+    }
+    await _auth.signOut();
+  }
+
+  // ============================================================
+  // createUserFromAdmin: usa una FirebaseApp secundaria para que
+  // el admin no pierda su sesión al crear pacientes/doctores.
+  // ============================================================
   Future<String> createUserFromAdmin({
     required String email,
     required String password,
@@ -112,30 +147,16 @@ class AuthService {
       await secondaryAuth.signOut();
       return createdUser.uid;
     } on FirebaseAuthException catch (e) {
-      if (kDebugMode) {
-        debugPrint('AuthService.createUserFromAdmin auth error: ${e.code} ${e.message}');
-      }
+      debugPrint('createUserFromAdmin auth error: ${e.code} ${e.message}');
       rethrow;
     } on FirebaseException catch (e) {
-      if (kDebugMode) {
-        debugPrint('AuthService.createUserFromAdmin firestore error: ${e.code} ${e.message}');
-      }
+      debugPrint('createUserFromAdmin firestore error: ${e.code} ${e.message}');
       if (createdUser != null) {
         try {
-          await createdUser!.delete();
-          if (kDebugMode) {
-            debugPrint('AuthService.createUserFromAdmin rollback: auth user deleted for ${createdUser!.uid}');
-          }
+          await createdUser.delete();
         } catch (deleteError) {
-          if (kDebugMode) {
-            debugPrint('AuthService.createUserFromAdmin rollback failed: $deleteError');
-          }
+          debugPrint('Rollback failed: $deleteError');
         }
-      }
-      rethrow;
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('AuthService.createUserFromAdmin unexpected error: $e');
       }
       rethrow;
     } finally {

@@ -7,6 +7,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   await LocalNotificationService.instance.initialize();
+
+
+
   runApp(MyApp());
 }
 
@@ -16,9 +19,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Time 4 med',
       debugShowCheckedModeBanner: false,
-      // 👇 AQUÍ APLICAMOS EL TEMA GLOBAL (Requisito de tu Práctica 6)
       theme: ThemeData(
-        primaryColor: const Color(0xFF6B5DE8), // El morado de tu diseño
+        primaryColor: const Color(0xFF6B5DE8),
         scaffoldBackgroundColor: Colors.white,
         fontFamily: 'Roboto',
         inputDecorationTheme: InputDecorationTheme(

@@ -70,7 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Ocurrió un error: \$e"),
+            content: Text("Ocurrió un error: $e"),
             backgroundColor: Colors.red,
           ),
         );
@@ -123,7 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Error de inicio de sesión con Google: \$e"),
+            content: Text("Error de inicio de sesión con Google: $e"),
             backgroundColor: Colors.red,
           ),
         );
