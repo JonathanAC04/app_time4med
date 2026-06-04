@@ -9,6 +9,7 @@ import 'perfil_paciente.dart';
 import 'agenda_paciente.dart';
 import 'salud_paciente.dart';
 import 'notificaciones_paciente.dart';
+import '../../data/catalogos.dart';
 
 class HomePaciente extends StatefulWidget {
   const HomePaciente({Key? key}) : super(key: key);
@@ -474,12 +475,29 @@ class _MiDiaViewState extends State<_MiDiaView> {
                   ),
                   const SizedBox(height: 16),
                   // Nombre
-                  TextField(
-                    controller: nombreController,
-                    decoration: const InputDecoration(
-                      labelText: "Nombre del medicamento",
-                      prefixIcon: Icon(Icons.medication_outlined),
-                    ),
+                  Autocomplete<String>(
+                    initialValue: TextEditingValue(text: nombreController.text),
+                    optionsBuilder: (TextEditingValue val) {
+                      if (val.text.isEmpty) return const Iterable<String>.empty();
+                      final q = val.text.toLowerCase();
+                      return Catalogos.medicamentos
+                          .where((m) => m.toLowerCase().contains(q))
+                          .take(8);
+                    },
+                    onSelected: (sel) => nombreController.text = sel,
+                    fieldViewBuilder: (context, ctrl, focusNode, onFieldSubmitted) {
+                      // Sincronizamos el controller interno del Autocomplete con el externo
+                      ctrl.text = nombreController.text;
+                      return TextField(
+                        controller: ctrl,
+                        focusNode: focusNode,
+                        decoration: const InputDecoration(
+                          labelText: "Nombre del medicamento",
+                          prefixIcon: Icon(Icons.medication_outlined),
+                        ),
+                        onChanged: (v) => nombreController.text = v,
+                      );
+                    },
                   ),
                   const SizedBox(height: 12),
                   // Dosis (Dropdown)
@@ -582,14 +600,19 @@ class _MiDiaViewState extends State<_MiDiaView> {
 
                                 final medicamentoId = await _firestoreService.addMedicamento(
                                     uid, nombre, selectedDosis!, selectedFechaHora!);
-                                await LocalNotificationService.instance
-                                    .scheduleMedicamentoReminders(
-                                  uid: uid,
-                                  medicamentoId: medicamentoId,
-                                  nombre: nombre,
-                                  dosis: selectedDosis!,
-                                  fechaHora: selectedFechaHora!,
-                                );
+
+                                // La notificación es secundaria: si falla, no rompemos el flujo.
+                                try {
+                                  await LocalNotificationService.instance.scheduleMedicamentoReminders(
+                                    uid: uid,
+                                    medicamentoId: medicamentoId,
+                                    nombre: nombre,
+                                    dosis: selectedDosis!,
+                                    fechaHora: selectedFechaHora!,
+                                  );
+                                } catch (notifError) {
+                                  debugPrint('No se pudo programar el recordatorio local: $notifError');
+                                }
 
                                 if (ctx.mounted) Navigator.pop(ctx);
                                 if (mounted) {

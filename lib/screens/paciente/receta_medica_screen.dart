@@ -215,8 +215,16 @@ class _RecetaMedicaScreenState extends State<RecetaMedicaScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final medico = _userData?['medico'] as Map<String, dynamic>?;
+      Widget build(BuildContext context) {
+        // "medico" en el doc del paciente puede venir como String (nombre suelto)
+    // o como Map con {nombre, especialidad, id}. Manejamos los dos casos.
+    Map<String, dynamic>? medico;
+    final rawMedico = _userData?['medico'];
+    if (rawMedico is Map<String, dynamic>) {
+      medico = rawMedico;
+    } else if (rawMedico is String && rawMedico.trim().isNotEmpty) {
+      medico = {'nombre': rawMedico.trim()};
+    }
     final pacienteNombre = _userData?['nombre'] as String? ?? 'Paciente';
     final now = DateTime.now();
     final fechaEmision =

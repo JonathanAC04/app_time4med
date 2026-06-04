@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../services/firestore_service.dart';
-
+import '../../data/catalogos.dart';
 class PacienteDoctorDetail extends StatefulWidget {
   final String doctorId;
   final String patientId;
@@ -70,12 +70,29 @@ class _PacienteDoctorDetailState extends State<PacienteDoctorDetail> {
                         fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: nombreController,
-                    decoration: const InputDecoration(
-                      labelText: "Nombre del medicamento",
-                      prefixIcon: Icon(Icons.medication_outlined),
-                    ),
+                  Autocomplete<String>(
+                    initialValue: TextEditingValue(text: nombreController.text),
+                    optionsBuilder: (TextEditingValue val) {
+                      if (val.text.isEmpty) return const Iterable<String>.empty();
+                      final q = val.text.toLowerCase();
+                      return Catalogos.medicamentos
+                          .where((m) => m.toLowerCase().contains(q))
+                          .take(8);
+                    },
+                    onSelected: (sel) => nombreController.text = sel,
+                    fieldViewBuilder: (context, ctrl, focusNode, onFieldSubmitted) {
+                      // Sincronizamos el controller interno del Autocomplete con el externo
+                      ctrl.text = nombreController.text;
+                      return TextField(
+                        controller: ctrl,
+                        focusNode: focusNode,
+                        decoration: const InputDecoration(
+                          labelText: "Nombre del medicamento",
+                          prefixIcon: Icon(Icons.medication_outlined),
+                        ),
+                        onChanged: (v) => nombreController.text = v,
+                      );
+                    },
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(

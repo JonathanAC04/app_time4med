@@ -4,6 +4,7 @@ import '../../services/firestore_service.dart';
 import '../../utils/date_helpers.dart';
 import 'receta_medica_screen.dart';
 import 'notificaciones_paciente.dart';
+import 'mensajes_paciente_view.dart';
 
 class AgendaPaciente extends StatefulWidget {
   final VoidCallback? onGoToProfile;
@@ -288,11 +289,18 @@ class _AgendaPacienteState extends State<AgendaPaciente> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showSnackBar("Próximamente: agendar nueva cita médica."),
-        backgroundColor: const Color(0xFF6B5DE8),
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+      floatingActionButton: FloatingActionButton.extended(
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MensajesPacienteView()),
+        );
+      },
+      backgroundColor: const Color(0xFF6B5DE8),
+      icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
+      label: const Text('Mensajes',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+    ),
     );
   }
 
