@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../services/firestore_service.dart';
 import 'notificaciones_paciente.dart';
 
@@ -18,6 +19,11 @@ class _RecetaMedicaScreenState extends State<RecetaMedicaScreen> {
 
   Map<String, dynamic>? _userData;
   bool _loadingUser = true;
+
+  /// Cache de los últimos medicamentos cargados por el StreamBuilder.
+  /// Lo usamos para armar el texto de la receta al compartir, sin tener
+  /// que volver a leer Firestore.
+  List<Map<String, dynamic>> _ultimosMedicamentos = [];
 
   static const List<String> _dosisOpciones = [
     '1 tableta (10mg)',
@@ -63,6 +69,60 @@ class _RecetaMedicaScreenState extends State<RecetaMedicaScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
+  }
+
+  /// Construye un texto de receta médica legible y lo comparte con el
+  /// selector nativo del sistema (WhatsApp, correo, etc.).
+  Future<void> _compartirReceta(Map<String, dynamic>? medico) async {
+    final pacienteNombre = _userData?['nombre'] as String? ?? 'Paciente';
+    final medicoNombre = (medico?['nombre'] as String?) ?? 'No asignado';
+    final especialidad = (medico?['especialidad'] as String?) ?? '';
+    final now = DateTime.now();
+    final fecha =
+        "${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}";
+
+    final buffer = StringBuffer();
+    buffer.writeln('🩺 RECETA MÉDICA — Time4Med');
+    buffer.writeln('========================================');
+    buffer.writeln('Paciente: $pacienteNombre');
+    buffer.writeln(
+        'Médico: Dr(a). $medicoNombre${especialidad.isNotEmpty ? ' · $especialidad' : ''}');
+    buffer.writeln('Fecha de emisión: $fecha');
+    buffer.writeln('========================================');
+    buffer.writeln('');
+    buffer.writeln('MEDICAMENTOS INDICADOS:');
+
+    if (_ultimosMedicamentos.isEmpty) {
+      buffer.writeln('  (Sin medicamentos registrados)');
+    } else {
+      for (var i = 0; i < _ultimosMedicamentos.length; i++) {
+        final m = _ultimosMedicamentos[i];
+        final nombre = (m['nombre'] as String?) ?? 'Sin nombre';
+        final dosis = (m['dosis'] as String?) ?? '';
+        final hora = (m['hora'] as String?) ?? '';
+        buffer.writeln('  ${i + 1}. $nombre');
+        if (dosis.isNotEmpty) buffer.writeln('     Dosis: $dosis');
+        if (hora.isNotEmpty) buffer.writeln('     Horario: $hora');
+      }
+    }
+
+    buffer.writeln('');
+    buffer.writeln('========================================');
+    buffer.writeln('Documento generado por la app Time4Med.');
+    buffer.writeln('No sustituye la consulta médica presencial.');
+    buffer.writeln('En caso de urgencia llama al 911.');
+
+    try {
+      await Share.share(
+        buffer.toString(),
+        subject: 'Receta médica de $pacienteNombre',
+      );
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('No se pudo compartir la receta: $e',
+            color: Colors.red);
+      }
+    }
   }
 
   void _editarMedicamento(String docId, Map<String, dynamic> data) {
@@ -215,8 +275,8 @@ class _RecetaMedicaScreenState extends State<RecetaMedicaScreen> {
   }
 
   @override
-      Widget build(BuildContext context) {
-        // "medico" en el doc del paciente puede venir como String (nombre suelto)
+  Widget build(BuildContext context) {
+    // "medico" en el doc del paciente puede venir como String (nombre suelto)
     // o como Map con {nombre, especialidad, id}. Manejamos los dos casos.
     Map<String, dynamic>? medico;
     final rawMedico = _userData?['medico'];
@@ -361,6 +421,12 @@ class _RecetaMedicaScreenState extends State<RecetaMedicaScreen> {
                             ? snapshot.data!.docs as List
                             : <dynamic>[];
 
+                        // Cacheamos los medicamentos para el botón "Compartir".
+                        _ultimosMedicamentos = docs
+                            .map((d) =>
+                                (d.data() as Map<String, dynamic>))
+                            .toList();
+
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -420,10 +486,7 @@ class _RecetaMedicaScreenState extends State<RecetaMedicaScreen> {
                       label: const Text("Compartir Receta",
                           style:
                               TextStyle(color: Colors.black, fontSize: 16)),
-                      onPressed: () {
-                        _showSnackBar(
-                            "📤 Compartir receta: función disponible próximamente");
-                      },
+                      onPressed: () => _compartirReceta(medico),
                     ),
                   ),
                   const SizedBox(height: 20),

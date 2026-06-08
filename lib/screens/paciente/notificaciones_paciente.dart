@@ -28,6 +28,81 @@ class _NotificacionesPacienteState extends State<NotificacionesPaciente> {
     }
   }
 
+  Future<void> _eliminarNotificacion(String notificationId) async {
+    if (_uid == null) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_uid!)
+          .collection('notificaciones')
+          .doc(notificationId)
+          .delete();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Error al eliminar: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _eliminarTodas(
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) async {
+    if (_uid == null || docs.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Borrar notificaciones'),
+        content: const Text(
+            '¿Seguro que deseas eliminar todas tus notificaciones? '
+            'Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Borrar todas',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      for (final doc in docs) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(_uid!)
+            .collection('notificaciones')
+            .doc(doc.id)
+            .delete();
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Notificaciones eliminadas.'),
+              backgroundColor: Colors.orange),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Error al eliminar: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   String _formatTiempo(Timestamp? ts) {
     if (ts == null) return "Ahora";
     final diff = DateTime.now().difference(ts.toDate());
@@ -104,16 +179,38 @@ class _NotificacionesPacienteState extends State<NotificacionesPaciente> {
 
           return Column(
             children: [
-              if (noLeidas > 0)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => _marcarTodasLeidas(docs),
-                    child: const Text(
-                      "Marcar todas",
-                      style: TextStyle(
-                          color: Color(0xFF6B5DE8), fontWeight: FontWeight.bold),
-                    ),
+              if (docs.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (noLeidas > 0)
+                        TextButton.icon(
+                          onPressed: () => _marcarTodasLeidas(docs),
+                          icon: const Icon(Icons.done_all,
+                              size: 18, color: Color(0xFF6B5DE8)),
+                          label: const Text(
+                            "Marcar todas",
+                            style: TextStyle(
+                                color: Color(0xFF6B5DE8),
+                                fontWeight: FontWeight.bold),
+                          ),
+                        )
+                      else
+                        const SizedBox.shrink(),
+                      TextButton.icon(
+                        onPressed: () => _eliminarTodas(docs),
+                        icon: const Icon(Icons.delete_sweep_outlined,
+                            size: 18, color: Colors.redAccent),
+                        label: const Text(
+                          "Borrar todas",
+                          style: TextStyle(
+                              color: Colors.redAccent,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               Expanded(
@@ -144,86 +241,107 @@ class _NotificacionesPacienteState extends State<NotificacionesPaciente> {
                           final leida = (notif['read'] as bool?) ?? false;
                           final tipo = (notif['type'] as String?) ?? '';
                           final color = _colorForType(tipo);
-                          return GestureDetector(
-                            onTap: () => _firestoreService.markUserNotificationAsRead(
-                              uid: _uid!,
-                              notificationId: docs[index].id,
-                            ),
-                            child: Container(
-                              padding: const EdgeInsets.all(15),
+
+                          return Dismissible(
+                            key: ValueKey(docs[index].id),
+                            direction: DismissDirection.endToStart,
+                            background: Container(
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.only(right: 22),
                               decoration: BoxDecoration(
-                                color: leida
-                                    ? Colors.white
-                                    : const Color(0xFFF3F0FF),
+                                color: Colors.redAccent,
                                 borderRadius: BorderRadius.circular(15),
-                                border: Border.all(
-                                  color: leida
-                                      ? Colors.grey.shade200
-                                      : const Color(0xFF6B5DE8).withOpacity(0.3),
-                                ),
                               ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: color.withOpacity(0.1),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(_iconForType(tipo),
-                                        color: color, size: 24),
+                              child: const Icon(Icons.delete,
+                                  color: Colors.white, size: 26),
+                            ),
+                            onDismissed: (_) =>
+                                _eliminarNotificacion(docs[index].id),
+                            child: GestureDetector(
+                              onTap: () =>
+                                  _firestoreService.markUserNotificationAsRead(
+                                uid: _uid!,
+                                notificationId: docs[index].id,
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.all(15),
+                                decoration: BoxDecoration(
+                                  color: leida
+                                      ? Colors.white
+                                      : const Color(0xFFF3F0FF),
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(
+                                    color: leida
+                                        ? Colors.grey.shade200
+                                        : const Color(0xFF6B5DE8)
+                                            .withOpacity(0.3),
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                (notif['title'] as String?) ??
-                                                    'Notificación',
-                                                style: TextStyle(
-                                                  fontWeight: leida
-                                                      ? FontWeight.w500
-                                                      : FontWeight.bold,
-                                                  fontSize: 14,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: color.withOpacity(0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(_iconForType(tipo),
+                                          color: color, size: 24),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  (notif['title'] as String?) ??
+                                                      'Notificación',
+                                                  style: TextStyle(
+                                                    fontWeight: leida
+                                                        ? FontWeight.w500
+                                                        : FontWeight.bold,
+                                                    fontSize: 14,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                            if (!leida)
-                                              Container(
-                                                width: 8,
-                                                height: 8,
-                                                decoration: const BoxDecoration(
-                                                  color: Color(0xFF6B5DE8),
-                                                  shape: BoxShape.circle,
+                                              if (!leida)
+                                                Container(
+                                                  width: 8,
+                                                  height: 8,
+                                                  decoration:
+                                                      const BoxDecoration(
+                                                    color: Color(0xFF6B5DE8),
+                                                    shape: BoxShape.circle,
+                                                  ),
                                                 ),
-                                              ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          (notif['body'] as String?) ?? '',
-                                          style: TextStyle(
-                                              color: Colors.grey.shade600,
-                                              fontSize: 13),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          _formatTiempo(
-                                              notif['createdAt'] as Timestamp?),
-                                          style: const TextStyle(
-                                              color: Colors.grey,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w500),
-                                        ),
-                                      ],
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            (notif['body'] as String?) ?? '',
+                                            style: TextStyle(
+                                                color: Colors.grey.shade600,
+                                                fontSize: 13),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            _formatTiempo(
+                                                notif['createdAt'] as Timestamp?),
+                                            style: const TextStyle(
+                                                color: Colors.grey,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           );

@@ -692,87 +692,185 @@ class _MiDiaViewState extends State<_MiDiaView> {
     _isReminderModalOpen = true;
     try {
       await showModalBottomSheet(
-      context: context,
-      isDismissible: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Recordatorio de toma",
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text(
-              nombre,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text("Dosis: $dosis", style: const TextStyle(color: Colors.black87)),
-            const SizedBox(height: 2),
-            Text(
-              "Fecha/Hora: ${formatDateToString(fechaHora)} ${formatTimeToString(fechaHora)}",
-              style: const TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      await _actualizarMedicamentoStatus(
-                        docId,
-                        'NO_TOMADO',
-                        medicationName: nombre,
-                      );
-                    },
-                    child: const Text("No la tomé"),
-                  ),
+        context: context,
+        isDismissible: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Barra superior (handle)
+              Container(
+                width: 44,
+                height: 5,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _abrirModalPosponerToma(
-                        docId: docId,
-                        nombre: nombre,
-                        dosis: dosis,
-                        fechaHoraBase: fechaHora,
-                      );
-                    },
-                    child: const Text("Posponer"),
+              ),
+              // Ícono grande con degradado
+              Container(
+                width: 84,
+                height: 84,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF6B5DE8), Color(0xFF9B8BFF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6B5DE8).withOpacity(0.35),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6B5DE8)),
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      await _actualizarMedicamentoStatus(
-                        docId,
-                        'TOMADO',
-                        medicationName: nombre,
-                      );
-                    },
-                    child:
-                        const Text("La tomé", style: TextStyle(color: Colors.white)),
+                child: const Icon(Icons.medication_rounded,
+                    color: Colors.white, size: 44),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                "Es hora de tu medicamento",
+                style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                nombre,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 14),
+              // Chips de dosis y hora
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _infoChip(Icons.scale_outlined, dosis),
+                  const SizedBox(width: 10),
+                  _infoChip(Icons.access_time_rounded,
+                      formatTimeToString(fechaHora)),
+                ],
+              ),
+              const SizedBox(height: 28),
+              // Botón principal "Ya la tomé"
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6B5DE8),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
                   ),
+                  icon: const Icon(Icons.check_circle_outline,
+                      color: Colors.white),
+                  label: const Text("Ya la tomé",
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold)),
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _actualizarMedicamentoStatus(docId, 'TOMADO',
+                        medicationName: nombre);
+                  },
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 12),
+              // Botones secundarios
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 50,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.orange.shade700,
+                          side: BorderSide(color: Colors.orange.shade200),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        icon: const Icon(Icons.snooze_rounded, size: 20),
+                        label: const Text("Posponer",
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _abrirModalPosponerToma(
+                            docId: docId,
+                            nombre: nombre,
+                            dosis: dosis,
+                            fechaHoraBase: fechaHora,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 50,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.redAccent,
+                          side: BorderSide(color: Colors.red.shade100),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        label: const Text("No la tomé",
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await _actualizarMedicamentoStatus(docId, 'NO_TOMADO',
+                              medicationName: nombre);
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
     } finally {
       _isReminderModalOpen = false;
     }
+  }
+
+  // Chip reutilizable para mostrar dosis y hora en el recordatorio.
+  Widget _infoChip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F0FF),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: const Color(0xFF6B5DE8)),
+          const SizedBox(width: 6),
+          Text(text,
+              style: const TextStyle(
+                  color: Color(0xFF6B5DE8),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13)),
+        ],
+      ),
+    );
   }
 
   void _abrirModalPosponerToma({
@@ -842,6 +940,7 @@ class _MiDiaViewState extends State<_MiDiaView> {
       String docId, String nombre, String dosis, DateTime nuevaFechaHora) async {
     if (_uid == null) return;
     try {
+      // 1) Lo importante: guardar en Firestore.
       await _firestoreService.updateMedicamento(_uid!, docId, {
         'fecha': formatDateToString(nuevaFechaHora),
         'hora': formatTimeToString(nuevaFechaHora),
@@ -849,18 +948,30 @@ class _MiDiaViewState extends State<_MiDiaView> {
         'status': 'POSPUESTO',
       });
 
-      await LocalNotificationService.instance.scheduleMedicamentoReminders(
-        uid: _uid!,
-        medicamentoId: docId,
-        nombre: nombre,
-        dosis: dosis,
-        fechaHora: nuevaFechaHora,
-      );
-      await _firestoreService.notifyDoctorMedicationStatus(
-        patientId: _uid!,
-        medicationName: nombre,
-        status: 'POSPUESTO',
-      );
+      // 2) Secundario: reprogramar la notificación local. Si falla, no rompe.
+      try {
+        await LocalNotificationService.instance.scheduleMedicamentoReminders(
+          uid: _uid!,
+          medicamentoId: docId,
+          nombre: nombre,
+          dosis: dosis,
+          fechaHora: nuevaFechaHora,
+        );
+      } catch (notifError) {
+        debugPrint('No se pudo reprogramar el recordatorio: $notifError');
+      }
+
+      // 3) Secundario: avisar al doctor. Si falla, no rompe.
+      try {
+        await _firestoreService.notifyDoctorMedicationStatus(
+          patientId: _uid!,
+          medicationName: nombre,
+          status: 'POSPUESTO',
+        );
+      } catch (notifyError) {
+        debugPrint('No se pudo notificar al doctor: $notifyError');
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -888,14 +999,22 @@ class _MiDiaViewState extends State<_MiDiaView> {
   }) async {
     if (_uid == null) return;
     try {
+      // Lo importante: guardar el estado en Firestore.
       await _firestoreService.updateMedicamentoStatus(_uid!, docId, nuevoStatus);
+
+      // Secundario: avisar al doctor. Si falla, no rompe el flujo.
       if (nuevoStatus == 'NO_TOMADO') {
-        await _firestoreService.notifyDoctorMedicationStatus(
-          patientId: _uid!,
-          medicationName: medicationName,
-          status: nuevoStatus,
-        );
+        try {
+          await _firestoreService.notifyDoctorMedicationStatus(
+            patientId: _uid!,
+            medicationName: medicationName,
+            status: nuevoStatus,
+          );
+        } catch (notifyError) {
+          debugPrint('No se pudo notificar al doctor: $notifyError');
+        }
       }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -932,16 +1051,55 @@ class _MiDiaViewState extends State<_MiDiaView> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          tooltip: "Notificaciones",
-          icon: const Icon(Icons.notifications_outlined, color: Colors.black),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NotificacionesPaciente()),
-            );
-          },
-        ),
+        leading: _uid == null
+            ? null
+            : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: _firestoreService.getUserNotificationsStream(_uid!),
+                builder: (context, snap) {
+                  final noLeidas = (snap.data?.docs ?? [])
+                      .where((d) => (d.data()['read'] as bool?) != true)
+                      .length;
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      IconButton(
+                        tooltip: "Notificaciones",
+                        icon: const Icon(Icons.notifications_outlined,
+                            color: Colors.black),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const NotificacionesPaciente()),
+                          );
+                        },
+                      ),
+                      if (noLeidas > 0)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(
+                                minWidth: 16, minHeight: 16),
+                            child: Text(
+                              noLeidas > 9 ? '9+' : '$noLeidas',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
         title: Column(children: [
           const Text("HOY", style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
           Text(todayLabel, style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
