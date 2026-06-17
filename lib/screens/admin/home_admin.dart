@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/firestore_service.dart';
 import 'doctores_admin_view.dart';
 import 'pacientes_admin_view.dart';
+import 'invitaciones_admin_view.dart';
 
 class HomeAdmin extends StatefulWidget {
   const HomeAdmin({Key? key}) : super(key: key);
@@ -36,9 +37,31 @@ class _HomeAdminState extends State<HomeAdmin> {
     }
   }
 
-  void _cerrarSesion() async {
-    await FirebaseAuth.instance.signOut();
-    if (mounted) Navigator.pushReplacementNamed(context, '/login');
+  void _cerrarSesion() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Cerrar sesión",
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text("¿Estás seguro de que deseas cerrar sesión?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancelar"),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await FirebaseAuth.instance.signOut();
+              if (mounted) Navigator.pushReplacementNamed(context, '/login');
+            },
+            child: const Text("Cerrar sesión",
+                style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -60,13 +83,6 @@ class _HomeAdminState extends State<HomeAdmin> {
         style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
       ),
       centerTitle: true,
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.logout, color: Colors.white),
-          tooltip: "Cerrar sesión",
-          onPressed: _cerrarSesion,
-        ),
-      ],
     );
   }
 
@@ -150,6 +166,16 @@ class _HomeAdminState extends State<HomeAdmin> {
             () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const PacientesAdminView()),
+            ),
+          ),
+          _buildBotonAccion(
+            Icons.mark_email_unread_outlined,
+            "Invitaciones",
+            "Asigna un rol a un correo por adelantado",
+            Colors.deepOrange,
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const InvitacionesAdminView()),
             ),
           ),
         ],
@@ -257,6 +283,16 @@ class _HomeAdminState extends State<HomeAdmin> {
           () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const PacientesAdminView()),
+          ),
+        ),
+        _buildBotonAccion(
+          Icons.mark_email_unread_outlined,
+          'Invitaciones',
+          'Asigna un rol a un correo por adelantado',
+          Colors.deepOrange,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const InvitacionesAdminView()),
           ),
         ),
 

@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../data/catalogos.dart';
 import '../../services/firestore_service.dart';
+import '../../services/cloudinary_service.dart';
 import 'paciente_doctor_detail.dart';
 import '../chat/chat_screen.dart';
 
@@ -19,6 +21,27 @@ class _HomeDoctorState extends State<HomeDoctor> {
   int _selectedIndex = 0;
 
   Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Cerrar sesión',
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('¿Estás seguro de que deseas cerrar sesión?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Cerrar sesión',
+                style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
     await FirebaseAuth.instance.signOut();
     if (!mounted) return;
     Navigator.pushReplacementNamed(context, '/login');
@@ -106,11 +129,6 @@ class _HomeDoctorState extends State<HomeDoctor> {
                 ],
               );
             },
-          ),
-          IconButton(
-            tooltip: 'Cerrar sesión',
-            icon: const Icon(Icons.logout, color: Colors.redAccent),
-            onPressed: _logout,
           ),
         ],
       ),
@@ -505,6 +523,86 @@ class _DoctorProfileTab extends StatefulWidget {
 
 class _DoctorProfileTabState extends State<_DoctorProfileTab> {
   final FirestoreService _service = FirestoreService();
+  final ImagePicker _picker = ImagePicker();
+
+  void _showSnackBar(String message, {Color color = const Color(0xFF6B5DE8)}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  Future<void> _seleccionarFotoGaleria() async {
+    final image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 85,
+    );
+    if (image == null) return;
+
+    _showSnackBar("📤 Subiendo foto...");
+
+    final bytes = await image.readAsBytes();
+    final url = await CloudinaryService.uploadImage(
+      bytes,
+      folder: 'perfiles_doctores',
+      publicId: widget.doctorId,
+    );
+
+    if (url == null) {
+      _showSnackBar("❌ Error al subir la foto. Intenta de nuevo.",
+          color: Colors.red);
+      return;
+    }
+
+    await _service.updateUserData(widget.doctorId, {'fotoUrl': url});
+    _showSnackBar("✅ Foto de perfil actualizada.");
+  }
+
+  Future<void> _borrarFotoPerfil() async {
+    await _service
+        .updateUserData(widget.doctorId, {'fotoUrl': FieldValue.delete()});
+    _showSnackBar("🗑️ Foto de perfil eliminada.");
+  }
+
+  void _abrirMenuFoto() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined,
+                  color: Color(0xFF6B5DE8)),
+              title: const Text("Elegir de la galería"),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _seleccionarFotoGaleria();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Color(0xFFFF4C79)),
+              title: const Text("Borrar foto de perfil"),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _borrarFotoPerfil();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<void> _showEditProfileDialog(Map<String, dynamic> currentData) async {
     final formKey = GlobalKey<FormState>();
@@ -512,8 +610,6 @@ class _DoctorProfileTabState extends State<_DoctorProfileTab> {
         TextEditingController(text: (currentData['nombre'] as String?) ?? '');
     final telefonoCtrl =
         TextEditingController(text: (currentData['telefono'] as String?) ?? '');
-    final fotoCtrl =
-        TextEditingController(text: (currentData['fotoUrl'] as String?) ?? '');
     final cedulaCtrl =
         TextEditingController(text: (currentData['cedula'] as String?) ?? '');
     String especialidad = (currentData['especialidad'] as String?) ?? '';
@@ -587,14 +683,6 @@ class _DoctorProfileTabState extends State<_DoctorProfileTab> {
                       prefixIcon: Icon(Icons.phone_outlined),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: fotoCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'URL de foto (opcional)',
-                      prefixIcon: Icon(Icons.image_outlined),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -620,7 +708,6 @@ class _DoctorProfileTabState extends State<_DoctorProfileTab> {
                             'especialidad': especialidad.trim(),
                             'cedula': cedulaCtrl.text.trim(),
                             'telefono': telefonoCtrl.text.trim(),
-                            'fotoUrl': fotoCtrl.text.trim(),
                             'updatedAt': FieldValue.serverTimestamp(),
                           },
                         );
@@ -683,16 +770,33 @@ class _DoctorProfileTabState extends State<_DoctorProfileTab> {
               ),
               child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: const Color(0xFFE8E5FF),
-                    backgroundImage: fotoUrl.trim().isNotEmpty
-                        ? NetworkImage(fotoUrl.trim())
-                        : null,
-                    child: fotoUrl.trim().isEmpty
-                        ? const Icon(Icons.person,
-                            size: 56, color: Color(0xFF6B5DE8))
-                        : null,
+                  GestureDetector(
+                    onTap: _abrirMenuFoto,
+                    child: Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        CircleAvatar(
+                          radius: 50,
+                          backgroundColor: const Color(0xFFE8E5FF),
+                          backgroundImage: fotoUrl.trim().isNotEmpty
+                              ? NetworkImage(fotoUrl.trim())
+                              : null,
+                          child: fotoUrl.trim().isEmpty
+                              ? const Icon(Icons.person,
+                                  size: 56, color: Color(0xFF6B5DE8))
+                              : null,
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF6B5DE8),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.camera_alt,
+                              color: Colors.white, size: 14),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -770,14 +874,20 @@ class _DoctorProfileTabState extends State<_DoctorProfileTab> {
             // Logout
             SizedBox(
               width: double.infinity,
-              child: TextButton.icon(
-                onPressed: widget.onLogout,
-                icon: const Icon(Icons.logout, color: Colors.redAccent),
-                label: const Text('Cerrar sesión',
-                    style: TextStyle(color: Colors.redAccent)),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+              height: 52,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade50,
+                  foregroundColor: Colors.red,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
                 ),
+                onPressed: widget.onLogout,
+                icon: const Icon(Icons.logout),
+                label: const Text('Cerrar sesión',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
               ),
             ),
           ],
@@ -793,6 +903,50 @@ class _DoctorProfileTabState extends State<_DoctorProfileTab> {
 class _NotificacionesSheet extends StatelessWidget {
   final String doctorId;
   const _NotificacionesSheet({required this.doctorId});
+
+  Future<void> _eliminarNotificacion(String notificationId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(doctorId)
+          .collection('notificaciones')
+          .doc(notificationId)
+          .delete();
+    } catch (_) {}
+  }
+
+  Future<void> _eliminarTodas(
+    BuildContext context,
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) async {
+    if (docs.isEmpty) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Borrar notificaciones'),
+        content: const Text(
+            '¿Seguro que deseas eliminar todas tus notificaciones? '
+            'Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Borrar todas',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    for (final doc in docs) {
+      await _eliminarNotificacion(doc.id);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -820,7 +974,7 @@ class _NotificacionesSheet extends StatelessWidget {
             const SizedBox(height: 14),
             const Text('Notificaciones',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 14),
+            const SizedBox(height: 6),
             Expanded(
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: service.getUserNotificationsStream(doctorId),
@@ -838,50 +992,96 @@ class _NotificacionesSheet extends StatelessWidget {
                       ),
                     );
                   }
-                  return ListView.separated(
-                    controller: scrollCtrl,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: docs.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, i) {
-                      final doc = docs[i];
-                      final n = doc.data();
-                      final title = (n['title'] as String?) ?? '';
-                      final body = (n['body'] as String?) ?? '';
-                      final read = (n['read'] as bool?) ?? false;
-                      return Container(
-                        decoration: BoxDecoration(
-                          color: read ? Colors.grey.shade100 : const Color(0xFFF5F3FF),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: read ? Colors.grey.shade200 : const Color(0xFFE8E5FF),
-                          ),
-                        ),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: const Color(0xFFE8E5FF),
-                            child: Icon(
-                              read
-                                  ? Icons.notifications_none
-                                  : Icons.notifications_active,
-                              color: const Color(0xFF6B5DE8),
+                  return Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            onPressed: () => _eliminarTodas(context, docs),
+                            icon: const Icon(Icons.delete_sweep_outlined,
+                                size: 18, color: Colors.redAccent),
+                            label: const Text(
+                              "Borrar todas",
+                              style: TextStyle(
+                                  color: Colors.redAccent,
+                                  fontWeight: FontWeight.bold),
                             ),
                           ),
-                          title: Text(title,
-                              style: TextStyle(
-                                fontWeight:
-                                    read ? FontWeight.w500 : FontWeight.bold,
-                              )),
-                          subtitle: Text(body),
-                          onTap: read
-                              ? null
-                              : () => service.markUserNotificationAsRead(
-                                    uid: doctorId,
-                                    notificationId: doc.id,
-                                  ),
                         ),
-                      );
-                    },
+                      ),
+                      Expanded(
+                        child: ListView.separated(
+                          controller: scrollCtrl,
+                          padding: const EdgeInsets.all(16),
+                          itemCount: docs.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
+                          itemBuilder: (context, i) {
+                            final doc = docs[i];
+                            final n = doc.data();
+                            final title = (n['title'] as String?) ?? '';
+                            final body = (n['body'] as String?) ?? '';
+                            final read = (n['read'] as bool?) ?? false;
+                            return Dismissible(
+                              key: ValueKey(doc.id),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 22),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(Icons.delete,
+                                    color: Colors.white, size: 26),
+                              ),
+                              onDismissed: (_) =>
+                                  _eliminarNotificacion(doc.id),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: read
+                                      ? Colors.grey.shade100
+                                      : const Color(0xFFF5F3FF),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: read
+                                        ? Colors.grey.shade200
+                                        : const Color(0xFFE8E5FF),
+                                  ),
+                                ),
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: const Color(0xFFE8E5FF),
+                                    child: Icon(
+                                      read
+                                          ? Icons.notifications_none
+                                          : Icons.notifications_active,
+                                      color: const Color(0xFF6B5DE8),
+                                    ),
+                                  ),
+                                  title: Text(title,
+                                      style: TextStyle(
+                                        fontWeight: read
+                                            ? FontWeight.w500
+                                            : FontWeight.bold,
+                                      )),
+                                  subtitle: Text(body),
+                                  onTap: read
+                                      ? null
+                                      : () =>
+                                          service.markUserNotificationAsRead(
+                                            uid: doctorId,
+                                            notificationId: doc.id,
+                                          ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   );
                 },
               ),

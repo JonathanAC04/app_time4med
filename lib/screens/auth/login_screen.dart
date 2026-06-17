@@ -15,6 +15,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _authService = AuthService();
   final _firestoreService = FirestoreService();
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   Future<void> _iniciarSesion() async {
     setState(() => _isLoading = true);
@@ -186,10 +187,20 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 8),
               TextField(
                 controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
+                obscureText: _obscurePassword,
+                decoration: InputDecoration(
                   hintText: "••••••••",
-                  prefixIcon: Icon(Icons.lock_outline),
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: Colors.grey,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                  ),
                 ),
               ),
               const SizedBox(height: 40),

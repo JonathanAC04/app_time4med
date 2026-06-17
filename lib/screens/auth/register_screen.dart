@@ -17,6 +17,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool _aceptaTerminos = false;
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   final AuthService _authService = AuthService();
   final FirestoreService _firestoreService = FirestoreService();
@@ -238,8 +239,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
         const SizedBox(height: 8),
         TextField(
           controller: controller,
-          obscureText: isPassword,
-          decoration: InputDecoration(hintText: hint, prefixIcon: Icon(icon)),
+          obscureText: isPassword ? _obscurePassword : false,
+          decoration: InputDecoration(
+            hintText: hint,
+            prefixIcon: Icon(icon),
+            suffixIcon: isPassword
+                ? IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: Colors.grey,
+                    ),
+                    onPressed: () => setState(
+                        () => _obscurePassword = !_obscurePassword),
+                  )
+                : null,
+          ),
         ),
         if (subtext != null) ...[
           const SizedBox(height: 5),
